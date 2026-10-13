@@ -78,24 +78,20 @@ describe('option engine evidence', () => {
 });
 
 describe('numeric engine display', () => {
-  it('shows all engines, line values, deciding gates and setting thresholds', async () => {
+  it('shows the rule-tree result, deciding gates and setting thresholds', async () => {
     mockRun();
     const user = userEvent.setup();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={client}><OptionEngineResults detail={detail} /></QueryClientProvider>);
-    await user.click(await screen.findByRole('button', { name: 'Engine outputs', exact: true }));
-    const table = await screen.findByRole('table', { name: 'Outputs by engine for this option and store' });
-    expect(within(table).getAllByRole('row')).toHaveLength(8);
-    expect(within(table).getByText('Markdown')).toBeInTheDocument();
+    const result = await screen.findByRole('region', { name: 'Rule-tree result' });
+    expect(within(result).getByRole('heading', { name: 'Discount' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Engine outputs', exact: true })).not.toBeInTheDocument();
     expect(screen.getByText('G4 · Deciding')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'G2 Move Not evaluated' }));
     expect(screen.getByText('G2A · Destination')).toBeInTheDocument();
     expect(screen.queryByText('G2B · Runway')).not.toBeInTheDocument();
     expect(screen.queryByText('G2C · Cap / cooldown')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'G3 Rail health Not evaluated' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^Markdown · ₹/ }));
-    expect(screen.getByText(bundle.lines[0]!.line_id)).toBeInTheDocument();
-    expect(screen.getByText('Reconciliation')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /G0 Eligibility/ }));
     const minimumAge = screen.getByText('Min age · d', { selector: 'dt' });
     expect(minimumAge.nextElementSibling).toHaveTextContent('14');

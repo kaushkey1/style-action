@@ -103,16 +103,14 @@ describe('store engine outputs', () => {
 });
 
 describe('parallel engine actions view', () => {
-  it.each(['engines', 'journey'])('shows outputs with expandable logic and no separate check panels in the %s option drawer', async view => {
+  it.each(['engines', 'journey'])('shows the result and expandable logic without a separate output section in the %s option drawer', async view => {
     const user = userEvent.setup();
     renderView(`&view=${view}&position=stock&option=700000206_SAND`);
     const drawer = await screen.findByRole('dialog');
     expect(await within(drawer).findByRole('button', { name: 'Inventory & sizes', exact: true })).toBeInTheDocument();
-    const outputs = await within(drawer).findByRole('button', { name: 'Engine outputs', exact: true });
-    expect(outputs).toHaveAttribute('aria-expanded', 'false');
+    expect(await within(drawer).findByRole('region', { name: 'Rule-tree result' })).toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: 'Engine outputs', exact: true })).not.toBeInTheDocument();
     expect(within(drawer).queryByRole('table', { name: 'Outputs by engine for this option and store' })).not.toBeInTheDocument();
-    await user.click(outputs);
-    expect(within(drawer).getByRole('table', { name: 'Outputs by engine for this option and store' })).toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: 'History', exact: true })).toBeInTheDocument();
     expect(within(drawer).getByRole('button', { name: 'View in store for this option' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(drawer).queryByRole('button', { name: 'View inventory', exact: true })).not.toBeInTheDocument();
@@ -129,12 +127,8 @@ describe('parallel engine actions view', () => {
     expect(within(drawer).getByRole('button', { name: 'Engine logic', exact: true })).toHaveAttribute('aria-expanded', 'false');
     await user.click(within(drawer).getByRole('button', { name: 'Engine logic', exact: true }));
     expect(await within(drawer).findByRole('group', { name: 'Whole engine workflow flowchart' })).toBeInTheDocument();
-    expect(within(drawer).getByRole('table', { name: 'Outputs by engine for this option and store' })).toBeInTheDocument();
     await user.click(within(drawer).getByRole('button', { name: 'Engine logic', exact: true }));
     expect(within(drawer).queryByRole('region', { name: 'Engine logic explorer' })).not.toBeInTheDocument();
-    expect(within(drawer).getByRole('table', { name: 'Outputs by engine for this option and store' })).toBeInTheDocument();
-    await user.click(outputs);
-    expect(outputs).toHaveAttribute('aria-expanded', 'false');
     expect(within(drawer).queryByRole('table', { name: 'Outputs by engine for this option and store' })).not.toBeInTheDocument();
   });
   it('opens full inventory details from engine outputs and keeps the filtered engine list on close', async () => {
@@ -160,7 +154,7 @@ describe('parallel engine actions view', () => {
     expect(screen.getByRole('button', { name: 'Shadow · 1', exact: true })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Inspect 700000305_ROSE' }));
     const drawer = await screen.findByRole('dialog');
-    expect(await within(drawer).findByText('Engine outputs')).toBeInTheDocument();
+    expect(await within(drawer).findByRole('region', { name: 'Rule-tree result' })).toBeInTheDocument();
     const inventoryTab = await within(drawer).findByRole('button', { name: 'Inventory & sizes', exact: true });
     expect(within(drawer).getByText('G4 · Deciding')).toBeInTheDocument();
     await user.click(inventoryTab);
@@ -207,9 +201,7 @@ it('keeps emitted outputs and their drawer visible when inventory evidence is un
   await user.click(screen.getByRole('button', { name: 'All options', exact: true }));
   await user.click(screen.getByRole('button', { name: `Inspect ${fixture.lines[0]!.option_code}` }));
   const drawer = await screen.findByRole('dialog');
-  expect(await within(drawer).findByText('Engine outputs')).toBeInTheDocument();
-  await user.click(within(drawer).getByRole('button', { name: 'Engine outputs', exact: true }));
-  expect(within(drawer).getByRole('table', { name: 'Outputs by engine for this option and store' })).toBeInTheDocument();
+  expect(await within(drawer).findByRole('region', { name: 'Rule-tree result' })).toBeInTheDocument();
   await user.click(within(drawer).getByRole('button', { name: 'Engine logic', exact: true }));
   expect(within(drawer).getByRole('group', { name: 'Whole engine workflow flowchart' })).toBeInTheDocument();
 });

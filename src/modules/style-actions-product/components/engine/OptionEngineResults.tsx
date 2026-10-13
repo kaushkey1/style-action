@@ -1,17 +1,13 @@
-import { CompactButton as Button } from '../CompactButton';
 import { useId, useState } from 'react';
-import { ChevronDown, GitBranch, ListChecks } from 'lucide-react';
-import { Badge, DataTable, DataTableBody, DataTableCell, DataTableHead, DataTableHeader, DataTableRow } from '@/components/ui';
+import { ChevronDown, GitBranch } from 'lucide-react';
+import { Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { formatPercent, formatUnits } from '../display';
 import { ErrorBlock, LoadingBlock } from '../QueryStates';
 import type { OptionStoreDetail } from '../../api/types';
-import { EvaluationStatus } from './EngineEvaluationDetail';
-import { evaluationCounts, evaluationReason } from './evaluationDisplay';
 import { EngineLogicDiagram } from './EngineLogicDiagram';
-import { useOptionEngine, type EngineActionLine, type EngineGateDetail, type EngineValue, type OptionEngineBundle } from './optionEngineData';
+import { useOptionEngine, type EngineGateDetail, type EngineValue, type OptionEngineBundle } from './optionEngineData';
 
-const ENGINES = [ ['replenishment', 'Replenishment'], ['broken', 'Broken sizes'], ['consolidation', 'Consolidation'], ['overfill', 'Overfill'], ['lifecycle_end', 'Lifecycle exit'], ['replacement', 'Replacement'], ['markdown', 'Markdown'] ] as const;
 const gateNames = ['Eligibility', 'Performance', 'Move', 'Rail health', 'Markdown'];
 const labels: Record<string, string> = { skip: 'Not reached', not_evaluated: 'Not evaluated', pass: 'Pass', fail: 'Fail', pass_behind: 'Behind', excluded: 'Excluded', shadow_recorded: 'Shadow', stop_and_approve: 'Approval', concentration_not_evaluated: 'Concentration N/A', lifecycle_age: 'Lifecycle age · d', days_in_store: 'Receipt age · d', min_age_days: 'Min age · d', exit_day: 'Exit day', true_ros_daily: 'True ROS / day', depth_pct: 'Depth', reference_price: 'Reference price', marked_price: 'Marked price', current_price: 'Current price', margin_floor: 'Margin floor', behind_share: 'Behind share', curve_target: 'Curve target', curve_pct: 'Curve target', runway_min_days: 'Min runway · d', runway_days: 'Runway · d', pullback_cap: 'Pullback cap', pullback_count: 'Pullbacks', cooldown_days: 'Cooldown · d', transit_days: 'Transit · d', markdown_start_day: 'Markdown start · d' };
 function label(value: string) { return labels[value] ?? value.replaceAll('_', ' ').replace(/^\w/, letter => letter.toUpperCase()); }
@@ -43,40 +39,6 @@ function RuleTreeResult({ bundle }: { bundle: OptionEngineBundle }) {
     {bundle.demo && <span className="text-[11px] text-gray-500">Illustrative · no execution</span>}
   </section>;
 }
-function LineDetail({ line }: { line: EngineActionLine }) {
-  const items: [string, string][] = [
-    ['Line ID', line.line_id], ['State', label(line.status)], ['Size', line.size ?? '—'], ['Article', line.article ?? '—'], ['Units', number(line.quantity)],
-    ['Current price', number(line.current_price, 'price')], ['Marked price', number(line.marked_price, 'price')], ['Reference', number(line.reference_price, 'price')], ['Margin floor', number(line.margin_floor, 'floor')], ['Depth', number(line.depth, 'depth')], ['Tier', number(line.tier)],
-    ['Destination', line.dest_store ?? line.dest_dc ?? '—'], ['Routing', line.autonomy_band ? label(line.autonomy_band) : '—'], ['Trigger', line.governance_trigger ? label(line.governance_trigger) : '—'], ['Linked line', line.linked_line_id ?? '—'], ['Reconciliation', line.reconciliation_status ? label(line.reconciliation_status) : '—'],
-  ];
-  return <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:grid-cols-4">{items.map(([name,value]) => <div key={name} className="min-w-0"><dt className="text-[11px] text-gray-500">{name}</dt><dd className="break-words text-xs font-medium tabular-nums text-gray-900">{value}</dd></div>)}</dl>;
-}
-function ActionLines({ bundle }: { bundle: OptionEngineBundle }) {
-  const [active, setActive] = useState<string | null>(null);
-  const selected = bundle.lines.find(line => line.line_id === active);
-  const evaluations = bundle.gate?.engine_evaluations ?? [];
-  const engines: [string, string][] = [...ENGINES.map(([key,name]): [string,string] => [key,name]), ...[...new Set([...bundle.lines.map(line => line.line_type), ...evaluations.map(item => item.engine)])].filter(key => !ENGINES.some(([known]) => known === key)).map((key): [string,string] => [key,label(key)])];
-  return <EngineDisclosure title="Engine outputs" icon={<ListChecks className="size-3.5 shrink-0 text-gray-500" aria-hidden />} summary={`${evaluations.length}/${engines.length} traces · ${bundle.lines.length} action ${bundle.lines.length === 1 ? 'line' : 'lines'} · ${bundle.lines.filter(line => line.reconciliation_status === 'matched').length} reconciled`}>
-    <DataTable minWidth="760px"><caption className="sr-only">Outputs by engine for this option and store</caption><DataTableHeader><DataTableHead>Engine</DataTableHead><DataTableHead>Evaluation</DataTableHead><DataTableHead align="right">Pass / Fail</DataTableHead><DataTableHead align="right">Lines</DataTableHead><DataTableHead align="right">Units</DataTableHead><DataTableHead align="right">Marked price</DataTableHead><DataTableHead>Line state</DataTableHead></DataTableHeader><DataTableBody>
-      {engines.map(([key,name]) => {
-        const lines = bundle.lines.filter(line => line.line_type === key);
-        const evaluation = evaluations.find(item => item.engine === key);
-        const counts = evaluationCounts(evaluation);
-        const quantities = lines.flatMap(line => line.quantity === null ? [] : [line.quantity]);
-        const prices = [...new Set(lines.flatMap(line => line.marked_price == null ? [] : [line.marked_price]))];
-        const statuses = [...new Set(lines.map(line => line.status))];
-        return <DataTableRow key={key}>
-          <DataTableCell className="py-2 text-xs font-medium">{name}</DataTableCell>
-          <DataTableCell className="max-w-44 py-2"><EvaluationStatus status={evaluation?.status} /><span className="mt-1 block text-[10px] leading-4 text-gray-500">{evaluationReason(evaluation)}</span></DataTableCell>
-          <DataTableCell align="right" className="py-2 text-xs tabular-nums" title={evaluation ? `${counts.pass} passed · ${counts.fail} failed · ${counts.skipped} not reached · ${counts.missing} unavailable` : 'Checks not recorded'}>{evaluation ? <><span className="font-semibold text-teal-700">{counts.pass}</span><span className="px-1 text-gray-400">/</span><span className={counts.fail ? 'font-semibold text-rose-700' : 'text-gray-500'}>{counts.fail}</span></> : '—'}</DataTableCell>
-          <DataTableCell align="right" className="py-2 tabular-nums">{lines.length}</DataTableCell><DataTableCell align="right" className="py-2 tabular-nums">{quantities.length ? `${formatUnits(quantities.reduce((a,b) => a+b,0))}${quantities.length < lines.length ? '+' : ''}` : '—'}</DataTableCell><DataTableCell align="right" className="py-2 tabular-nums">{prices.length === 1 ? number(prices[0], 'price') : prices.length ? `${number(Math.min(...prices),'price')}–${number(Math.max(...prices),'price')}` : '—'}</DataTableCell><DataTableCell className="py-2">{statuses.length === 1 ? <Status value={statuses[0]!} /> : statuses.length ? `${statuses.length} states` : <span className="text-xs text-gray-500">No lines</span>}</DataTableCell>
-        </DataTableRow>;
-      })}
-    </DataTableBody></DataTable>
-    {bundle.lines.length > 0 && <div className="space-y-2"><h4 className="text-xs font-medium text-gray-500">Action line details</h4><div className="flex flex-wrap gap-2">{bundle.lines.map(line => <Button key={line.line_id} size="sm" variant={active === line.line_id ? 'secondary' : 'outline'} aria-pressed={active === line.line_id} onClick={() => setActive(active === line.line_id ? null : line.line_id)} title={line.line_id}>{label(line.line_type)} · {line.size ?? (line.quantity !== null ? `${line.quantity} units` : number(line.marked_price,'price'))}</Button>)}</div>{selected && <LineDetail line={selected} />}</div>}
-  </EngineDisclosure>;
-}
-
 function GateValues({ gate }: { gate: EngineGateDetail }) {
   return <div className="space-y-3">{Object.entries(gate.metrics ?? {}).length > 0 && <dl className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">{Object.entries(gate.metrics ?? {}).map(([key,value]) => <div key={key}><dt className="text-xs text-gray-500">{label(key)}</dt><dd className="mt-1 text-xs font-semibold tabular-nums text-gray-900">{number(value, key)}</dd></div>)}</dl>}{gate.sub_gates?.filter(sub => sub.result !== 'skip').map(sub => <div className="space-y-3 border-t border-gray-100 pt-3" key={sub.gate}><div className="flex items-center gap-2 text-xs font-medium"><span>{sub.gate.replace('gate_', 'G').toUpperCase()} · {sub.label}</span><Status value={sub.result} /></div><GateValues gate={sub} /></div>)}</div>;
 }
@@ -142,6 +104,5 @@ export function EngineBundleResults({ bundle }: { bundle: OptionEngineBundle }) 
     <RuleTreeResult bundle={bundle} />
     <GateTrace bundle={bundle} />
     <EngineLogicDisclosure key={`${bundle.run.run_id}-${bundle.gate?.option_code ?? bundle.lines[0]?.option_code ?? 'unknown'}`} bundle={bundle} />
-    <ActionLines bundle={bundle} />
   </div>;
 }

@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OptionStoreDetail } from '@/modules/style-actions-product/api/types';
 import { demoResponse, DEMO_SNAPSHOT_ID } from '@/modules/style-actions-product/data/demoApi';
 import { makeDemoOptionEngine } from '@/modules/style-actions-product/data/demoOptionEngine';
@@ -80,17 +80,19 @@ describe('engine evaluation drill-down', () => {
     expect(screen.getByRole('table', { name: 'Recorded checks for Markdown' })).toBeInTheDocument();
   });
 
-  it('keeps action output available without inventing evaluations when the API has no traces', async () => {
+  it('keeps the result and logic available without inventing checks when the API has no traces', async () => {
     const user = userEvent.setup();
     const withoutTraces = structuredClone(bundle);
     delete withoutTraces.gate!.engine_evaluations;
     withoutTraces.demo = false;
     render(<EngineBundleResults bundle={withoutTraces} />);
-    await user.click(screen.getByRole('button', { name: 'Engine outputs', exact: true }));
-    const table = screen.getByRole('table', { name: 'Outputs by engine for this option and store' });
-    expect(within(table).getAllByText('Not recorded')).toHaveLength(7);
-    expect(within(table).getByText('36')).toBeInTheDocument();
-    expect(screen.queryByRole('table', { name: 'Recorded checks for Replenishment' })).not.toBeInTheDocument();
-    expect(within(table).queryByText('Passed')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Rule-tree result' })).getByRole('heading', { name: 'Liquidation' })).toBeInTheDocument();
+    vi.stubGlobal('requestAnimationFrame', vi.fn()); // scrolling is verified in the browser
+    await user.click(screen.getByRole('button', { name: 'Engine logic', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Inspect 1 · Eligibility recorded checks' }));
+    const evaluation = screen.getByRole('region', { name: 'Replenishment evaluation' });
+    expect(within(evaluation).getByText('Not recorded')).toBeInTheDocument();
+    expect(within(evaluation).getByText('No recorded checks for this engine in this run.')).toBeInTheDocument();
+    expect(within(evaluation).queryByText('Passed')).not.toBeInTheDocument();
   });
 });

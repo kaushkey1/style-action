@@ -64,7 +64,7 @@ describe('progressive disclosure', () => {
     await user.click(await screen.findByRole('button', { name: /^Explore Shirts,/ }));
     await user.click(await screen.findByRole('button', { name: 'Explore 700000004_OLIVE' }));
     const dialog = await screen.findByRole('dialog');
-    expect(await within(dialog).findByText('Engine outputs')).toBeInTheDocument();
+    expect(await within(dialog).findByRole('button', { name: 'Engine logic', exact: true })).toBeInTheDocument();
     expect(within(dialog).queryByText('The story so far')).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('table', { name: /Sizes of/ })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Cross-check', exact: true })).not.toBeInTheDocument();
@@ -89,10 +89,10 @@ describe('progressive disclosure', () => {
     await user.click(await screen.findByRole('button', { name: /^Explore Shirts,/ }));
     await user.click((await screen.findAllByRole('button', { name: /^Explore 700/ }))[0]);
     const dialog = await screen.findByRole('dialog');
-    expect(await within(dialog).findByText('Engine outputs')).toBeInTheDocument();
+    expect(await within(dialog).findByRole('button', { name: 'Engine logic', exact: true })).toBeInTheDocument();
     expect(within(dialog).getByText('Illustrative · no execution')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'View sold for this option' }));
-    expect(await within(dialog).findByText('Engine outputs')).toBeInTheDocument();
+    expect(await within(dialog).findByRole('button', { name: 'Engine logic', exact: true })).toBeInTheDocument();
     expect(within(dialog).queryByText('Did it fulfil the buying objective?')).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Close', exact: true }));
     expect(screen.getByRole('button', { name: 'Sold: 7,398 units since first receipt' })).toHaveAttribute('aria-pressed', 'true');
