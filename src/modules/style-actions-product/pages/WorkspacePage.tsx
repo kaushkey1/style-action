@@ -239,7 +239,7 @@ export default function WorkspacePage(): React.ReactNode {
           </>
         }
       />
-      <HealthStrip snapshot={active.snapshot} onOpen={openHealth} />
+      <HealthStrip compact snapshot={active.snapshot} onOpen={openHealth} />
       {/* One notice at a time: the drawer carries it (with Extend) while it is open (S2-R20). */}
       {active.snapshot && !params.isHealthOpen ? (
         <ContentStatus snapshot={active.snapshot} serverVersion={active.serverVersion} canExtend={canExtend} />

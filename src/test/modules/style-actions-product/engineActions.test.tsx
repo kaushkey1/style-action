@@ -140,7 +140,7 @@ describe('parallel engine actions view', () => {
   it('opens full inventory details from engine outputs and keeps the filtered engine list on close', async () => {
     const user = userEvent.setup();
     renderView();
-    expect(await screen.findByRole('button', { name: 'All actions · 35 lines' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Explore Move stock' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Engine actions', exact: true })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Inventory age in store')).not.toBeInTheDocument();
     const legend = () => within(screen.getByRole('group', { name: 'Engine output mix' }));
@@ -150,7 +150,7 @@ describe('parallel engine actions view', () => {
     expect(legend().queryByRole('button', { name: /Filter Engine output mix by (Replenishment|Broken sizes|Consolidation|Overfill|Replacement)/ })).not.toBeInTheDocument();
     expect(legend().queryByRole('button', { name: 'Filter Engine output mix by Markdown' })).not.toBeInTheDocument();
     expect(legend().getByRole('button', { name: 'Engine output mix · Lifecycle exit: 24' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Explore Change price' }));
+    await user.click(screen.getByRole('button', { name: 'Explore Markdown' }));
     expect(legend().getAllByRole('button', { name: /^Filter Engine output mix by / })).toHaveLength(1);
     expect(legend().getByRole('button', { name: 'Filter Engine output mix by Markdown' })).toBeInTheDocument();
     expect(legend().getByRole('button', { name: 'Engine output mix · Markdown: 11' })).toBeInTheDocument();
@@ -202,7 +202,7 @@ it('keeps emitted outputs and their drawer visible when inventory evidence is un
   });
   const user = userEvent.setup();
   renderView();
-  expect(await screen.findByRole('button', { name: 'All actions · 35 lines' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: 'Explore Move stock' })).toBeInTheDocument();
   expect(screen.getByText('Product labels unavailable. Outputs are shown by option code.')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'All options', exact: true }));
   await user.click(screen.getByRole('button', { name: `Inspect ${fixture.lines[0]!.option_code}` }));
