@@ -1,0 +1,13 @@
+{
+  "5331f8af-b091-cb9f-e2a4-d247f2acaf16"  : { 
+    "org_name"  : "Reliance Retail Limited",
+    "stages"    : [
+      {"action": "pullback",       "type" : "bottom-seller",      "schedule" : "0 0 * * 1,4", "is_active" : true, "dry_run" : false}, 
+      {"action": "pullback",       "type" : "broken-set",         "schedule" : "0 0 * * 1,4", "is_active" : false, "dry_run" : false},
+      {"action": "pullback",       "type" : "lifecycle-crossed",  "schedule" : "0 0 * * 1,4", "is_active" : false, "dry_run" : false},
+      {"action": "pullback",       "type" : "planogram-overfill", "schedule" : "0 0 * * 1,4", "is_active" : false, "dry_run" : false},
+      {"action": "replenishment",  "type" : "",                   "schedule" : "0 0 * * *",   "is_active" : true, "dry_run" : false},
+      {"action": "redistribution", "type" : "",                   "schedule" : "0 0 * * 1",   "is_active" : false, "dry_run" : false}
+    ]
+  }
+}

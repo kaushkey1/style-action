@@ -1,0 +1,198 @@
+{
+  "5331f8af-b091-cb9f-e2a4-d247f2acaf16"  : { 
+    "org_name"       : "Reliance Industries Limited",
+    "schedule_cron"  : "0 6 * * *", 
+    "bq_project_id"  : "fynd-jio-impetus-prod",
+    "data_sources"   : [
+      {"name" : "stock",           "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code"], "interval" : 14,  "is_active" : true}, 
+      {"name" : "sales",           "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code", "brand_id", "fashion_grade", "mh_sbu_cd", "mh_segment_cd", "mh_family_cd", "mh_brick_cd", "mh_brick_desc"], "interval" : 14,  "is_active" : true}, 
+      {"name" : "str",             "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code"], "interval" : 42,  "is_active" : true},
+      {"name" : "grn",             "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code", "fashion_grade"], "interval" : 14, "is_active" : false},
+      {"name" : "inward",          "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code", "brand_id", "fashion_grade", "mh_segment_cd", "mh_family_cd", "mh_brick_cd", "mh_brick_desc"], "interval" : 3, "is_active" : true}, 
+      {"name" : "avg_billing_qty", "backend" : "bq", "level" : "option",  "merge_columns" : ["option_code"],         "interval" : 14, "is_active" : true},
+      {"name" : "replenishments",  "backend" : "pg", "level" : "article", "merge_columns" : ["site", "option_code"], "interval" : 7,  "is_active" : false}, 
+      {"name" : "pullbacks",       "backend" : "pg", "level" : "option",  "merge_columns" : ["site", "option_code"], "interval" : 7,  "is_active" : false}, 
+      {"name" : "redistribution",  "backend" : "pg", "level" : "article", "merge_columns" : ["site", "option_code"], "interval" : 7,  "is_active" : false}
+    ],
+    "custom_data_sources": [
+      {
+        "name"           : "fill_rate", 
+        "query_template" : "fill_rate_store_brand_brick", 
+        "backend"        : "bq", 
+        "level"          : "option",  
+        "merge_columns"  : ["site", "brand_id", "fashion_grade", "mh_segment_cd", "mh_family_cd", "mh_brick_cd"],
+        "interval"       : 14, 
+        "is_active"      : true
+      }
+    ],
+    "merge_columns"  : ["site", "article"],
+    "non_null_cols"  : ["closing_stock_qty", "total_dc_stock", "fill_rate", "plan_options", "option_count", "po_qty", "str", "avg_str", "billing_qty",
+                        "fill_rate_options", "target_qty", "target_gap", "target_option_qty", "target_option_gap"],
+    "tables"   : {
+      "sales"                 : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.sales",
+      "stock"                 : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.Stock",
+      "inward"                : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.INWARD",
+      "catalog"               : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.CATALOG",
+      "site"                  : "fynd-jio-impetus-prod.impetus_planning.stores",
+      "planogram_quantities"  : "fynd-jio-impetus-prod.impetus_planning.store_planogram",
+      "planogram_groups"      : "fynd-jio-impetus-prod.impetus_planning.store_planogram_groups",
+      "store_lead_times"      : "fynd-jio-impetus-prod.impetus_planning.store_lead_times",
+      "plm_sku"               : "fynd-jio-impetus-prod.plmpublic.ed_sku",
+      "plm_style"             : "fynd-jio-impetus-prod.plmpublic.ed_style",
+      "forecasts"             : "impetus_planning.results_article_weekly",
+      "forecast_tracker"      : "impetus_planning.results_tracker",
+      "anr_runs"              : "impetus_planning.anr_runs",
+      "anr_redistribution"    : "impetus_planning.anr_redistribution_new",
+      "grn"                   : "fynd-jio-impetus-prod.analytics_scanpack.public_grn",
+      "grn_item"              : "fynd-jio-impetus-prod.analytics_scanpack.public_grn_item"
+    },
+    "input_custom_columns" :[
+      {
+        "data_source"   : "str",
+        "column"        : "str",
+        "formula"       : "(SUM(billing_qty) / (SUM(billing_qty) + SUM(total_stk_qty))) * 100"
+      },
+      {
+        "data_source"   : "str",
+        "column"        : "avg_str",
+        "formula"       : "COALESCE(AVG((SUM(billing_qty) / (SUM(billing_qty) + SUM(total_stk_qty))) * 100) OVER (PARTITION BY s.option_code), 0)"
+      }
+    ],
+    "data_points"   : [
+      {
+        "name"          : "ros",
+        "type"          : "calculated",
+        "formula"       : "result_df['billing_qty'] / 2",
+        "is_active"     : true,
+        "description"   : "Billing Quantity / 2 - since is for 2 weeks and we need ros per week"
+      },
+      {
+        "name"          : "average_ros_all_stores",
+        "type"          : "calculated",
+        "formula"       : "result_df['avg_billing_qty'] / 2",
+        "is_active"     : true,
+        "description"   : "Average ROS across stores / 2 - since data is for 2 weeks and we need ros per week"
+      },
+      {
+        "name"          : "cover_days",
+        "type"          : "dictionary",
+        "formula"       : "{'fashion_grade' : {'0001': 60, '0002': 60, '0003': 60, '0004': 60, '0011': 60}}",
+        "is_active"     : true,
+        "description"   : "Cover days by fashion grade"
+      },
+      {
+        "name"          : "pullback_qty",
+        "type"          : "static",
+        "formula"       : "closing_stock_qty",
+        "is_active"     : true,
+        "description"   : "closing_stock_qty"
+      }
+    ],
+    "filter_rules": [
+      {
+        "name"          : "exclude_no_planogram_entries",
+        "field"         : "plan_qty", 
+        "operator"      : "is_not_null",
+        "is_active"     : true,
+        "description"   : "ROS >= Average ROS across stores"
+      },
+      {
+        "name"          : "non_core_check",
+        "field"         : "fashion_grade", 
+        "operator"      : "!=",
+        "value"         : "0001",
+        "is_active"     : false,
+        "description"   : "Excluded Core from Pullback"
+      },
+      {
+        "name"          : "low_str_check",
+        "field"         : "str", 
+        "operator"      : "<=",
+        "value"         : "col(avg_str)",
+        "is_active"     : true,
+        "description"   : "STR < Average STR"
+      },
+      {
+        "name"          : "low_ros_check",
+        "field"         : "ros",
+        "operator"      : "<=", 
+        "value"         : "col(average_ros_all_stores)",
+        "is_active"     : true,
+        "description"   : "ROS < Average ROS across stores"
+      },
+      {
+        "name"          : "aging_stock_check",
+        "field"         : "age",
+        "operator"      : ">",
+        "value"         : 45,
+        "is_active"     : false,
+        "description"   : "Age at store > 45 days"
+      },
+      {
+        "name"          : "fill_rate_check",
+        "field"         : "fill_rate_brick",
+        "operator"      : ">=",
+        "value"         : 90,
+        "is_active"     : true,
+        "description"   : "Fill rate >= 90%"
+      },
+      {
+        "name"          : "fill_rate_options_check",
+        "field"         : "fill_rate_options",
+        "operator"      : ">=",
+        "value"         : 90,
+        "is_active"     : true,
+        "description"   : "Fill rate >= 90%"
+      },
+      {
+        "name"          : "target_gap_check",
+        "field"         : "target_brick_gap",
+        "operator"      : ">",
+        "value"         : 0,
+        "is_active"     : true,
+        "description"   : "Pullback quantity >= 90%"
+      },
+      {
+        "name"          : "has_pullback_check",
+        "field"         : "pullback_qty",
+        "operator"      : ">",
+        "value"         : 0,
+        "is_active"     : true,
+        "description"   : "Pullback quantity >= 90%"
+      }
+    ],
+    "pullback_calculation_template" : {
+      "name"        : "lowest_ros_first",
+      "match_on"    : "option_code",
+      "description" : "For the brick target gap pull stock for options sorted by ROS (lowest ROS first)",
+      "is_active"   : true
+    },
+    "replacement_template" : {
+      "name"        : "incoming_po_select",
+      "match_on"    : "option_code",
+      "description" : "Pick the matching hierarchy from incoming POs as replacement without repeat and filtering out ones that do not have a replacememt",
+      "is_active"   : true
+    },
+    "constants": {
+      "batch_size"            : "1000",
+      "trailing_days"         : 14,
+      "default_cover_days"    : 60,
+      "min_sales_threshold"   : 0.01,
+      "days_per_week"         : 7,
+      "segments_in_scope"     : ["42", "55", "56", "80"],
+      "sub_formats_in_scope"  : ["14", "42", "43", "49"],
+      "brands_in_scope"       : ["F085", "F086", "F639", "D699"],
+      "run_date"              : "2026-02-25",
+      "default_fill_rate"     : 0.9,
+      "comments_for_ui"       : "Bottom Seller based Pullback",
+      "trailing_window"       : 7,
+      "pullback_cooldown"     : 14,
+      "bs_enabled"            : true,
+      "bs_min_stock_age"      : 45,
+      "bs_fill_rate_floor"    : 90,
+      "bs_target_option_gap"  : 3,
+      "bs_target_brick_gap"   : 15,
+      "bs_exclude_core"       : true
+    }
+  }
+}

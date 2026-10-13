@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Pillar 4 — pre-push fast feedback (0 CI minutes).
+# Install once with: git config core.hooksPath .githooks
+# Runs the cheap inline gates locally. Advisory by default so it never traps you;
+# set GATES_BLOCK=1 to make a failure abort the push.
+set -uo pipefail
+
+fail=0
+run() { echo "[pre-push] $1"; shift; "$@" || fail=1; }
+
+run "lint"  npm run --silent lint
+echo "[pre-push] typecheck"; npx --no-install tsc --noEmit || fail=1
+echo "[pre-push] unit tests"; npx --no-install vitest run || fail=1
+echo "[pre-push] gate self-tests"; node ci/tests/test_gates.cjs || fail=1
+
+if [ "$fail" -ne 0 ]; then
+  if [ "${GATES_BLOCK:-0}" = "1" ]; then
+    echo "[pre-push] gates failed — push aborted (GATES_BLOCK=1)"; exit 1
+  fi
+  echo "[pre-push] gates reported issues (advisory — push allowed). Set GATES_BLOCK=1 to enforce."
+fi
+exit 0

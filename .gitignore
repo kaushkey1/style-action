@@ -1,0 +1,107 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-prototype
+dist-buying
+dist-ssr
+dev-dist
+*.local
+*.local.md
+*.local.html
+
+# Environment variables
+.env
+.env.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Claude Code
+.claude/settings.local.json
+.claude/worktrees/
+
+# Environment
+.env
+.env.local
+
+# SSL certs
+.certs/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Coverage output
+coverage/
+
+# Smarti cache (SQLite)
+.cache/
+
+# Capacitor native platforms (regenerate with `npx cap add ios/android`)
+ios/
+android/
+
+# Graphify (regenerate with `graphify install-integrations --project-local` + `graphify run`)
+.graphify/
+graphify.toml
+.claude/.graphify-install.json
+.claude/agents/graphify-*.md
+.claude/agents/graphify-ci-guardian.md
+.claude/commands/gf-*.md
+.claude/skills/graphify-*/
+
+# Local MCP config (machine-specific)
+.mcp.local.json
+
+# Local-only files — paired with `import.meta.glob('./*.local.tsx', { eager: true })`
+# in tracked files. Any *.local.{ts,tsx,js,jsx} sits next to its host module,
+# gets auto-discovered when present, and stays invisible in git. Use this for
+# personal sandboxes, experiments, or per-developer additions to shared modules.
+*.local.tsx
+*.local.ts
+*.local.jsx
+*.local.js
+
+# Motion Lab — local-only animation A/B sandbox; never commit these
+src/modules/docs/pages/MotionLabPage.tsx
+src/modules/docs/components/motion-lab/
+.claude/motion-lab-*.png
+
+# Design Lab — local-only DEV design sandbox; never commit these
+src/modules/_design-lab/
+
+# Buying module — generated evidence and offline export (build outputs, ~20 MB)
+deliverables/buying-evidence/
+deliverables/Impetus_Buying_Offline.html
+# Real-data review screenshots stay local (security review W8, 4 Oct 2026)
+.impeccable/review/
+
+# Private machine configuration and generated files
+.env*
+!.env.example
+.npmrc
+certs/
+*.pem
+*.key
+*.p12
+*.pfx
+*.tsbuildinfo
+__pycache__/
+SOURCE_MANIFEST.json

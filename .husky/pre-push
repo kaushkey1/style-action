@@ -1,0 +1,10 @@
+# Load nvm and switch to the project Node version
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+nvm use 2>/dev/null || true
+
+echo "Running tests..."
+# Keep concurrent jsdom suites from starving the five-second interaction tests.
+npm run test -- --maxWorkers=2 || { echo "Tests failed. Push blocked."; exit 1; }
+
+echo "Running lint + type-check + build..."
+npm run verify || { echo "Verify failed. Push blocked."; exit 1; }

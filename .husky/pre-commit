@@ -1,0 +1,4 @@
+# Load nvm and switch to the project Node version
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+nvm use 2>/dev/null || true
+npx lint-staged

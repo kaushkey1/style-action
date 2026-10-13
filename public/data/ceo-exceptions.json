@@ -1,0 +1,288 @@
+{
+  "generatedAt": "2026-03-21T10:00:00Z",
+  "exceptions": [
+    {
+      "id": "bq-exc-001",
+      "displayId": "EXC-BQ-001",
+      "title": "Critical aged inventory: Womens Wear Rs.186 Cr (>90 days)",
+      "severity": "S1",
+      "status": "awaiting-approval",
+      "systems": ["Cortex", "SAP", "Fynd OMS"],
+      "agents": ["A4", "A12", "A9"],
+      "type": "Threshold Breach",
+      "domain": "SELL",
+      "lifecycle_stage": "IN_SEASON",
+      "impact": "Rs.186 Cr tied in 275K articles >90 days across Womens Wear",
+      "projected_impact_inr": 1860000000,
+      "projected_cm_impact": -2.8,
+      "playbook_id": "PB-SELL-007",
+      "timestamp": "2026-03-21T06:00:00Z",
+      "relativeTime": "4h ago",
+      "response_sla": "4 hrs",
+      "relatedKpiId": "K029",
+      "cascadeChain": [
+        {
+          "system": "Cortex",
+          "description": "275K articles aged >90 days, representing 29.6% of Womens Wear inventory value"
+        },
+        {
+          "system": "SAP",
+          "description": "Markdown pressure building: 41K SKUs require immediate liquidation action"
+        },
+        {
+          "system": "POS",
+          "description": "GM erosion: Womens Wear GM down 2.8 pts QoQ due to increased aged stock"
+        },
+        {
+          "system": "Finance",
+          "description": "Working capital lock: Rs.186 Cr inventory not generating returns"
+        }
+      ],
+      "recommendations": [
+        {
+          "agent": "A4",
+          "action": "Execute liquidation markdown on 41K SKUs — graduated discount 30-60% based on age"
+        },
+        {
+          "agent": "A12",
+          "action": "Redistribute 18K fast-selling units to Tier-1 stores to improve turnover"
+        },
+        {
+          "agent": "A9",
+          "action": "Pause Contemporary POs worth Rs.12 Cr until aged stock clears below 20% threshold"
+        }
+      ]
+    },
+    {
+      "id": "bq-exc-002",
+      "displayId": "EXC-BQ-002",
+      "title": "Negative gross margin: Womens Wear Contemporary at -17.2%",
+      "severity": "S1",
+      "status": "awaiting-approval",
+      "systems": ["SAP", "POS"],
+      "agents": ["A1", "A4", "A9"],
+      "type": "Threshold Breach",
+      "domain": "SELL",
+      "lifecycle_stage": "IN_SEASON",
+      "impact": "Rs.1.58 Cr revenue at -17.2% GM, discount intensity 61.3%",
+      "projected_impact_inr": 15800000,
+      "projected_cm_impact": -1.5,
+      "timestamp": "2026-03-21T08:00:00Z",
+      "relativeTime": "2h ago",
+      "response_sla": "2 hrs",
+      "relatedKpiId": "K001",
+      "cascadeChain": [
+        {
+          "system": "POS",
+          "description": "Discount intensity at 61.3% — 21 pts above segment average"
+        },
+        {
+          "system": "SAP",
+          "description": "Gross margin turned negative at -17.2% — selling below cost"
+        },
+        {
+          "system": "Finance",
+          "description": "Overall Womens Wear GM dragged down by 1.5 pts due to Contemporary losses"
+        }
+      ],
+      "recommendations": [
+        {
+          "agent": "A1",
+          "action": "Cap discount at 40% across Contemporary sub-segment immediately"
+        },
+        {
+          "agent": "A4",
+          "action": "Pull 2,100 worst-margin SKUs from sale floor until pricing corrected"
+        },
+        {
+          "agent": "A9",
+          "action": "Redirect Rs.8L marketing spend from Contemporary to high-margin Ethnic Wear"
+        }
+      ]
+    },
+    {
+      "id": "bq-exc-003",
+      "displayId": "EXC-BQ-003",
+      "title": "Discount intensity spike: Sports Footwear +8.2 pts WoW to 57.4%",
+      "severity": "S2",
+      "status": "agent-reviewing",
+      "systems": ["SAP", "POS"],
+      "agents": ["A1", "A12"],
+      "type": "Trend Deviation",
+      "domain": "SELL",
+      "lifecycle_stage": "IN_SEASON",
+      "impact": "Discount jumped from 49.2% to 57.4% in one week, GM at 17.7%",
+      "projected_impact_inr": 11000000,
+      "timestamp": "2026-03-21T07:30:00Z",
+      "relativeTime": "2.5h ago",
+      "relatedKpiId": "K001",
+      "cascadeChain": [
+        {
+          "system": "POS",
+          "description": "Sports Footwear discount intensity jumped 8.2 pts WoW to 57.4%"
+        },
+        {
+          "system": "SAP",
+          "description": "Gross margin compressed to 17.7% — approaching breakeven threshold"
+        },
+        {
+          "system": "Finance",
+          "description": "Projected Rs.1.1 Cr margin loss if discount level sustains for 2 weeks"
+        }
+      ],
+      "recommendations": [
+        {
+          "agent": "A1",
+          "action": "Review promotional calendar for conflicting campaigns — 3 active promos detected"
+        },
+        {
+          "agent": "A12",
+          "action": "Consolidate slow-moving Sports Footwear to 200 top-performing stores"
+        }
+      ]
+    },
+    {
+      "id": "bq-exc-004",
+      "displayId": "EXC-BQ-004",
+      "title": "Critical sell-through: Lingerie at 2.1% over 30 days",
+      "severity": "S2",
+      "status": "agent-reviewing",
+      "systems": ["Cortex", "Fynd OMS"],
+      "agents": ["A4", "A12"],
+      "type": "Threshold Breach",
+      "domain": "LIQUIDATION",
+      "lifecycle_stage": "END_OF_SEASON",
+      "impact": "88K units sold vs 4.07M in stock — 46 months to clear at current velocity",
+      "projected_impact_inr": 1252000000,
+      "timestamp": "2026-03-21T09:00:00Z",
+      "relativeTime": "1h ago",
+      "relatedKpiId": "K029",
+      "cascadeChain": [
+        {
+          "system": "Cortex",
+          "description": "Lingerie sell-through at 2.1% — 88K units sold against 4.07M in stock"
+        },
+        {
+          "system": "Fynd OMS",
+          "description": "Rs.125.2 Cr inventory value with 55.3% aged >90 days"
+        },
+        {
+          "system": "Finance",
+          "description": "46-month clearance timeline at current velocity — massive working capital lock"
+        }
+      ],
+      "recommendations": [
+        {
+          "agent": "A12",
+          "action": "Bundle slow-moving Lingerie with fast-selling Womens Wear in 500 stores"
+        },
+        {
+          "agent": "A4",
+          "action": "Consolidate Lingerie inventory to top 300 stores and execute 40% markdown"
+        }
+      ]
+    },
+    {
+      "id": "bq-exc-005",
+      "displayId": "EXC-BQ-005",
+      "title": "Aged inventory alert: Mens Casual Rs.87 Cr (>90 days)",
+      "severity": "S2",
+      "status": "agent-analyzing",
+      "systems": ["Cortex", "SAP"],
+      "agents": ["A4", "A9"],
+      "type": "Threshold Breach",
+      "domain": "SELL",
+      "lifecycle_stage": "IN_SEASON",
+      "impact": "Rs.87 Cr in 91K aged articles, GM dropped 3.5 pts WoW to 35.3%",
+      "projected_impact_inr": 870000000,
+      "projected_cm_impact": -1.2,
+      "timestamp": "2026-03-21T05:00:00Z",
+      "relativeTime": "5h ago",
+      "relatedKpiId": "K029",
+      "cascadeChain": [
+        {
+          "system": "Cortex",
+          "description": "91K aged articles (>90 days) worth Rs.87 Cr in Mens Casual"
+        },
+        {
+          "system": "SAP",
+          "description": "Gross margin dropped 3.5 pts WoW to 35.3% due to markdown activity"
+        },
+        {
+          "system": "Finance",
+          "description": "Contribution margin impact: -1.2 pts on overall Mens Wear segment"
+        }
+      ],
+      "recommendations": [
+        {
+          "agent": "A4",
+          "action": "Prepare end-of-season markdown batch for 91K aged Mens Casual articles"
+        },
+        {
+          "agent": "A9",
+          "action": "Reduce Mens Casual intake by 25% for next 2 months to clear aged stock"
+        }
+      ]
+    },
+    {
+      "id": "bq-exc-006",
+      "displayId": "EXC-BQ-006",
+      "title": "Low sell-through: Footwear Accessories at 1.9% over 30 days",
+      "severity": "S3",
+      "status": "investigating",
+      "systems": ["Cortex"],
+      "agents": ["A12", "A4"],
+      "type": "Threshold Breach",
+      "domain": "LIQUIDATION",
+      "lifecycle_stage": "END_OF_SEASON",
+      "impact": "4,831 units sold vs 252K in stock — 52 months to clear",
+      "projected_impact_inr": 94000000,
+      "timestamp": "2026-03-21T08:30:00Z",
+      "relativeTime": "1.5h ago",
+      "relatedKpiId": "K029",
+      "cascadeChain": [
+        {
+          "system": "Cortex",
+          "description": "Footwear Accessories sell-through at 1.9% — only 4,831 units sold"
+        },
+        {
+          "system": "Cortex",
+          "description": "252K units in stock worth Rs.9.4 Cr, with 79.6% aged >90 days"
+        },
+        {
+          "system": "Finance",
+          "description": "52-month clearance timeline threatens to become deadstock"
+        }
+      ],
+      "recommendations": [
+        {
+          "agent": "A12",
+          "action": "Test bundling Footwear Accessories with Sports Footwear in 100 pilot stores"
+        },
+        {
+          "agent": "A4",
+          "action": "Execute aggressive 50% markdown on aged Footwear Accessories inventory"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "bySeverity": {
+      "S1": 2,
+      "S2": 3,
+      "S3": 1,
+      "S4": 0
+    },
+    "byDomain": {
+      "SELL": 4,
+      "LIQUIDATION": 2
+    },
+    "byStatus": {
+      "awaiting-approval": 2,
+      "agent-reviewing": 2,
+      "agent-analyzing": 1,
+      "investigating": 1
+    }
+  }
+}

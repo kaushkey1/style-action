@@ -1,0 +1,1376 @@
+# Style Actions Engine Layer — Specification
+
+_9 Oct 2026 · Loukit Kumar_
+
+Status: draft for review. Parent: `docs/spec-inputs/engine-logic-flows.md` (the engine bible). Builds on Scope 2 (`docs/scopes/scope-2-health-space-dc.md`). Logic source: Style Actions spec v2, readiness baseline `docs/spec-inputs/engine-readiness-2026-10-03.md`.
+
+---
+
+## 1. Outcome
+
+After the engine layer is built, on existing snapshot data:
+- a **nightly engine run** evaluates every Fashion and Ultimate option × store through the rule tree (Gates 0–4) and produces action lines: replenishment, pullback (broken/consolidation/overfill/lifecycle-end/replacement), markdown, or hold;
+- each action line carries its **full decision trace**: which gate decided, what metrics drove the decision, which settings version applied;
+- a **settings cascade** resolves 38 configurable parameters through a 10-level hierarchy so every threshold is traceable and overridable;
+- **Temporal** orchestrates the run: strict sequencing (replenishment before pullback), per-DC parallelism, timers for review windows, signals for human approvals;
+- **Phase 0 (shadow)** runs engines against existing snapshots with no execution — record-only, for validation against historical ANR outputs;
+- the UI scope document (`impetus-agentic-prototype/docs/specs/style-actions-engine-scope.md`) describes how these outputs surface in the frontend.
+
+**Not in this spec:**
+- Live execution (STO dispatch via Procuro/SAP, CPE price changes) — Phase 2;
+- VMI interlocks for Core — Phase 2;
+- Test & Scale — Phase 3;
+- Outcome measurement and calibration — Phase 4;
+- Frontend implementation — separate spec in `impetus-agentic-prototype`.
+
+---
+
+## 2. Phasing
+
+| Phase | Engine scope | Execution mode | External data needed | Milestone |
+|---|---|---|---|---|
+| **0 — Shadow** | All engines run against existing snapshots | Record-only: lines written to DB, no files, no STOs | None. Gate 3 → "not evaluated". Gate 4 → provisional if no cost data. Concentration → "not evaluated", all markdown → stop-and-approve | Compare engine outputs against historical ANR recommendations |
+| **1 — File mode** | Same engines, live nightly snapshots | CSV export (replenishment, pullback, markdown files) with line contract | Cost/margin feed (N1), current price feed (N12) | Pilot with category team reviewing files |
+| **2 — Live** | Same engines + VMI interlocks | Direct STO (Procuro/SAP) + CPE price changes + read-back reconciliation | All of Phase 1 + VMI feed + rail health values (N2) + concentration values (N5) | Automated execution with governance |
+
+Phase 0 validates by running against existing snapshots (e.g. `snap_legacy_0922`, snapshots built for S3KG + V012) and comparing outputs against the ANR baseline tables (`analytics_planning.impetus_planning_anr_*`). No new BigQuery cost.
+
+---
+
+## 3. Architecture
+
+### 3.1 System context
+
+```
+┌──────────────────────────────────────────────┐
+│              FastAPI application              │
+│  Existing: /v1/health, /v1/snapshots, ...    │
+│  New:      /v1/engine/*, /v1/lines/*         │
+└──────────┬───────────────────────────────────┘
+           │
+┌──────────▼───────────────────────────────────┐
+│                 PostgreSQL                    │
+│  ┌──────────────────┐  ┌──────────────────┐  │
+│  │ Snapshot tables   │  │ Engine tables    │  │
+│  │ (20, immutable)   │  │ (8, new)         │  │
+│  │ Scope 1 + 1a + 2  │  │ Owned by engine  │  │
+│  └──────────────────┘  └──────────────────┘  │
+└──────────▲───────────────────────────────────┘
+           │ reads snapshot, writes engine
+┌──────────┴───────────────────────────────────┐
+│           Temporal Worker (Python)             │
+│  NightlyEngineWorkflow                         │
+│    ├─ ResolveSettings                          │
+│    ├─ parallel:                                │
+│    │   ├─ EvaluateRuleTree                     │
+│    │   └─ ReplenishmentWorkflow (child, per DC)│
+│    ├─ PullbackWorkflow (child, Mon/Thu, per DC)│
+│    ├─ MarkdownEngine                           │
+│    ├─ GovernanceRouting                        │
+│    └─ ExecutionDispatch                        │
+│  ReviewWorkflow (long-running)                 │
+│    ├─ Timer: 12h review window                 │
+│    ├─ Signal: approve/reject/block             │
+│    └─ Timer: 72h STO expiry                    │
+└──────────────────────────────────────────────┘
+```
+
+### 3.2 Immutability rule
+
+The engine never writes to snapshot tables. It reads from them (option_store_measure, option_health, stock_size, dc_stock_size, space_fill, lead_time, planogram, store, sales_line, option_size_day) and writes only to its own `engine_*` tables. A snapshot can be used by many engine runs; an engine run reads exactly one snapshot.
+
+### 3.3 Module structure
+
+```
+src/style_actions/engine/
+├── __init__.py
+├── models.py              # SQLAlchemy / dataclass models for engine tables
+├── settings.py            # Cascade resolution, pinning, defaults
+├── replenishment.py       # F10, F11, capacity cap, size split, DC rationing
+├── rule_tree.py           # Gates 0–4, outcome classification
+├── pullback.py            # DC demand (F12–F13), Broken (F14), Consolidation,
+│                          #   Overfill, Lifecycle-end, Replacement
+├── markdown.py            # F18–F22, ladder, floor clamp, concentration
+├── governance.py          # T1–T7 triggers, auto vs stop-and-approve routing
+├── execution.py           # CSV generation (Phase 1)
+├── line_state.py          # State machine transitions
+├── reconciliation.py      # Read-back, expiry, mismatch (Phase 2)
+├── workflows/
+│   ├── nightly.py         # NightlyEngineWorkflow (top-level)
+│   ├── replenishment.py   # Per-DC replenishment child workflow
+│   ├── pullback.py        # Per-DC pullback child workflow
+│   └── review.py          # Long-running review/approval workflow
+└── activities/
+    ├── settings.py        # resolve_settings activity
+    ├── measure.py         # read_snapshot_measures activity
+    ├── compute.py         # run_replenishment, evaluate_rule_tree, etc.
+    └── dispatch.py        # generate_csv, release_lines activities
+```
+
+---
+
+## 4. Database schema (one migration: `005_engine`)
+
+### 4.1 engine_run
+
+One row per engine run.
+
+| Column | Type | Notes |
+|---|---|---|
+| run_id | text PK | `run_<ulid>` |
+| snapshot_id | text FK → snapshot | The snapshot this run reads |
+| org_id | text NOT NULL | Organisation |
+| run_date | date NOT NULL | The business date of this run |
+| run_type | text NOT NULL | `nightly` or `pullback` (Mon/Thu pullback is part of the nightly run, but recorded separately for clarity) |
+| phase | text NOT NULL | `shadow`, `file`, `live` |
+| status | text NOT NULL | `pending`, `running`, `succeeded`, `failed`, `cancelled` |
+| temporal_workflow_id | text | Temporal workflow ID for observability |
+| settings_version | text | The pinned settings version used |
+| pullback_night | bool NOT NULL DEFAULT false | Whether this is a Mon/Thu pullback night |
+| started_at | timestamptz | |
+| finished_at | timestamptz | |
+| line_counts | jsonb | `{replenishment: 42, broken: 3, consolidation: 5, ...}` |
+| error | text | On failure |
+| created_at | timestamptz NOT NULL DEFAULT now() | |
+
+Index: `(org_id, run_date)`.
+
+### 4.2 engine_settings
+
+Configurable thresholds with 10-level cascade.
+
+| Column | Type | Notes |
+|---|---|---|
+| setting_id | serial PK | |
+| org_id | text NOT NULL | |
+| scope | text NOT NULL | One of: `global`, `org`, `store`, `brick`, `grade`, `brick_grade`, `dc`, `dc_brick_grade`, `dc_store`, `dc_store_brick_grade` |
+| scope_key | text | The scope value, e.g. `S3KG` for dc, `SHIRT:Fashion` for brick_grade, `S3KG:8080` for dc_store. NULL for global |
+| param | text NOT NULL | Parameter name (see §5) |
+| value | jsonb NOT NULL | The value (numeric, text, or structured) |
+| version | text NOT NULL | Version tag for pinning |
+| effective_from | date NOT NULL | |
+| created_at | timestamptz NOT NULL DEFAULT now() | |
+| created_by | text | |
+
+Unique: `(org_id, scope, scope_key, param, version)`.
+
+**Resolution order** (most specific wins, first match):
+
+1. dc_store_brick_grade — `S3KG:8080:SHIRT:Fashion`
+2. dc_store — `S3KG:8080`
+3. dc_brick_grade — `S3KG:SHIRT:Fashion`
+4. dc — `S3KG`
+5. brick_grade — `SHIRT:Fashion`
+6. grade — `Fashion`
+7. brick — `SHIRT`
+8. store — `8080`
+9. org — (org_id)
+10. global — (NULL)
+
+### 4.3 engine_line
+
+Every action line the engine produces. Full state machine.
+
+| Column | Type | Notes |
+|---|---|---|
+| line_id | text PK | `line_<ulid>` |
+| run_id | text FK → engine_run | |
+| line_type | text NOT NULL | `replenishment`, `broken`, `consolidation`, `overfill`, `lifecycle_end`, `replacement`, `markdown` |
+| status | text NOT NULL | `proposed`, `shadow_recorded`, `released`, `in_review`, `blocked`, `held`, `rejected`, `accepted_downstream`, `in_transit_or_applied`, `received_or_priced`, `reconciled`, `mismatch`, `expired` (see §6.1) |
+| option_code | text NOT NULL | |
+| store_code | text NOT NULL | Source store |
+| dc_code | text | |
+| article | text | For size-level lines |
+| size | text | For size-level lines (replenishment, rationing) |
+| quantity | int | Units |
+| dest_store | text | Destination for moves |
+| dest_dc | text | Destination DC |
+| current_price | numeric | From current_price table |
+| marked_price | numeric | Computed marked price (markdown) |
+| reference_price | numeric | Pre-markdown price (for cumulative ladder) |
+| margin_floor | numeric | F19 |
+| depth | numeric | Ladder depth % |
+| tier | int | Ladder tier (1, 2, 3) |
+| reason | text | Human-readable reason |
+| deciding_gate | text | Which gate decided (for rule-tree lines) |
+| autonomy_band | text | `auto`, `review_window`, `stop_and_approve` |
+| governance_trigger | text | T1–T7 or NULL |
+| approver_role | text | Required approver role |
+| idempotency_key | text UNIQUE | `{run_id}:{line_type}:{option}:{store}:{size}:{version}` |
+| linked_line_id | text FK → engine_line | Linked replacement ↔ pullback |
+| settings_used | jsonb | Key settings values that drove this line |
+| decided_at | timestamptz | When approved/rejected/blocked |
+| decided_by | text | Who decided |
+| released_at | timestamptz | When released for execution |
+| execution_ref | text | STO number, CPE ref, or CSV filename |
+| expires_at | timestamptz | 72h STO expiry or 12h review window |
+| reconciled_at | timestamptz | |
+| reconciliation_status | text | `matched`, `mismatch`, `expired` |
+| created_at | timestamptz NOT NULL DEFAULT now() | |
+
+Indexes: `(run_id, line_type)`, `(run_id, store_code)`, `(run_id, option_code)`, `(status)`, `(idempotency_key)`.
+
+### 4.4 gate_result
+
+Per-option rule tree decision trace.
+
+| Column | Type | Notes |
+|---|---|---|
+| run_id | text FK → engine_run | Composite PK part |
+| store_code | text | Composite PK part |
+| option_code | text | Composite PK part |
+| grade_class | text | Fashion, Ultimate, Core |
+| lifecycle_age | int | F16 at run time |
+| days_in_store | int | F15 at run time |
+| band | text | From option_health |
+| true_ros_daily | numeric | From option_health |
+| availability | numeric | F6 used |
+| gap | numeric | F4 |
+| gate_0 | text | `pass`, `exit`, `wait` |
+| gate_0_reason | text | e.g. `lifecycle_age_90`, `under_min_age` |
+| gate_1 | text | `pass_behind`, `leave_alone`, `wait_unmeasurable`, `supply_constrained` |
+| gate_1_reason | text | |
+| gate_2a | text | `pass`, `fail`, `skip` |
+| gate_2a_reason | text | e.g. `destination_found:5943`, `no_destination` |
+| gate_2b | text | `pass`, `fail`, `skip` |
+| gate_2b_reason | text | e.g. `runway_25d`, `runway_12d_insufficient` |
+| gate_2c | text | `pass`, `fail`, `skip` |
+| gate_2c_reason | text | e.g. `pullbacks_1_cooldown_ok`, `pullbacks_3_cap_reached` |
+| gate_3 | text | `healthy`, `dead`, `not_evaluated` |
+| gate_3_reason | text | e.g. `thresholds_missing`, `rail_4_of_6_peers_selling` |
+| gate_4 | text | `discount`, `hold_no_headroom`, `hold_not_day_60`, `already_marked_down`, `not_evaluated` |
+| gate_4_reason | text | e.g. `headroom_359`, `cost_unavailable` |
+| deciding_gate | text | The gate that determined the outcome |
+| outcome | text NOT NULL | `leave_alone`, `supply_hold`, `move`, `hold`, `discount`, `hold_to_exit`, `liquidation`, `wait` |
+| outcome_reason | text | |
+| settings_used | jsonb | Key settings values applied |
+
+PK: `(run_id, store_code, option_code)`.
+
+### 4.5 dc_demand
+
+DC demand and shortfall per article × DC per run.
+
+| Column | Type | Notes |
+|---|---|---|
+| run_id | text FK → engine_run | Composite PK part |
+| dc_code | text | Composite PK part |
+| article | text | Composite PK part |
+| option_code | text NOT NULL | |
+| grade_class | text NOT NULL | |
+| eligible_stores | int | Stores contributing demand |
+| demand | numeric | F12 |
+| dc_stock | int | DC on-hand saleable after replenishment |
+| shortfall | numeric | F13 |
+| remaining_shortfall | numeric | After broken + consolidation pulls |
+
+PK: `(run_id, dc_code, article)`.
+
+### 4.6 option_state
+
+Cross-run state per option × store. Persists across engine runs. Updated by each run.
+
+| Column | Type | Notes |
+|---|---|---|
+| org_id | text | Composite PK part |
+| store_code | text | Composite PK part |
+| option_code | text | Composite PK part |
+| is_marked_down | bool NOT NULL DEFAULT false | One-way door |
+| markdown_tier | int | Current tier (1, 2, 3) |
+| reference_price | numeric | Pre-markdown price (for cumulative ladder) |
+| last_marked_price | numeric | Most recent marked price |
+| markdown_run_id | text | Run that first marked it down |
+| pullback_count | int NOT NULL DEFAULT 0 | Lifetime pullbacks |
+| last_pullback_date | date | For cooldown check |
+| last_pullback_run_id | text | |
+| is_pulled_back | bool NOT NULL DEFAULT false | Currently pulled back |
+| pulled_back_at | date | |
+| updated_at | timestamptz NOT NULL DEFAULT now() | |
+
+PK: `(org_id, store_code, option_code)`.
+
+### 4.7 cost_margin
+
+Cost and margin floor per option. Placeholder for external feed (N1). Populated manually or by an import job until the feed exists.
+
+| Column | Type | Notes |
+|---|---|---|
+| org_id | text | Composite PK part |
+| option_code | text | Composite PK part |
+| base_cost | numeric | ₹ |
+| taxes | numeric | ₹ |
+| cost_buffer | numeric | ₹ |
+| category_margin | numeric | ₹ |
+| margin_floor | numeric | F19 = base_cost + taxes + cost_buffer + category_margin |
+| effective_date | date NOT NULL | |
+| source | text | `manual`, `import`, `finance_feed` |
+| created_at | timestamptz NOT NULL DEFAULT now() | |
+
+PK: `(org_id, option_code)`.
+
+### 4.8 current_price
+
+Current price per option × store. Placeholder for CPE/POS feed (N12). In Phase 0, derived from the latest sales row (net ÷ qty) as a stand-in.
+
+| Column | Type | Notes |
+|---|---|---|
+| org_id | text | Composite PK part |
+| store_code | text | Composite PK part |
+| option_code | text | Composite PK part |
+| current_price | numeric | ₹ |
+| price_source | text | `sales_derived`, `cpe`, `pos`, `manual` |
+| as_of | date | |
+| fetched_at | timestamptz NOT NULL DEFAULT now() | |
+
+PK: `(org_id, store_code, option_code)`.
+
+---
+
+## 5. Settings catalogue
+
+All 38 configurable parameters with their defaults from the engine bible. Every parameter is stored in `engine_settings` and resolved through the cascade (§4.2).
+
+### 5.1 Foundation
+
+| Param | Default | Level | Engine | Bible ref |
+|---|---|---|---|---|
+| `min_age_days` | 14 | grade | All — eligibility | §6.2, §10.3 |
+| `curve_target` | 0.75 | store × brick | Foundation, Gate 1 | §9.2 |
+| `curve_day` | 60 | store × brick | Foundation, Gate 1 | §9.2 |
+| `curve_after_60` | `hold` | global | Foundation, Gate 1 | D2 (needs ruling) |
+| `band_sc_gap` | 0.10 | global | Foundation | §9.4 |
+| `band_sc_avail` | 0.80 | global | Foundation | §9.4 |
+| `band_watch_gap` | 0.10 | global | Foundation | §9.4 |
+| `band_under_gap` | 0.30 | global | Foundation | §9.4 |
+
+### 5.2 Replenishment
+
+| Param | Default | Level | Engine | Bible ref |
+|---|---|---|---|---|
+| `repl_window_day` | 60 | global | Replenishment | §9.5 |
+| `cover_days_fashion` | 7 | grade × DC | DC demand (F12) | §9.7 |
+| `cover_days_ultimate` | 14 | grade × DC | DC demand (F12) | §9.7 |
+| `depth_base_factor` | 9.25 | brick | Space plan (F17) | policy Step 5 |
+| `depth_tier_multiplier` | 1.00 | store × brick | Space plan (F17) | policy Step 5 |
+
+### 5.3 Pullback
+
+| Param | Default | Level | Engine | Bible ref |
+|---|---|---|---|---|
+| `broken_threshold` | 0.50 | global | Broken (F14) | §9.9, C1 |
+| `broken_pivot_out` | true | global | Broken trigger | C1 |
+| `space_floor_options` | 1.00 | store × brick × grade | Broken, Consolidation, Overfill | §10.3 |
+| `space_floor_qty` | 0.90 | store × brick × grade | Broken, Consolidation, Overfill | §10.3 |
+| `overfill_threshold` | 1.20 | store × brick × grade | Overfill | §10.3 |
+| `pullback_cap` | 3 | global | Gate 2c | §10.3, D15 |
+| `cooldown_days` | 21 | global | Gate 2c | §10.3, D15 |
+| `pullback_cadence` | `mon_thu` | global | Pullback scheduling | §8.1 |
+
+### 5.4 Rule tree and markdown
+
+| Param | Default | Level | Engine | Bible ref |
+|---|---|---|---|---|
+| `gate1_behind` | `watch_or_under` | global | Gate 1 | D13 |
+| `runway_min_days` | 21 | global | Gate 2b | D14 |
+| `transit_days` | 2 | global | Gate 2b | D14 |
+| `markdown_start_day` | 60 | global | Gate 4, markdown | §10.3 |
+| `exit_day` | 90 | global | Gate 0, lifecycle-end | §9.12 |
+| `exit_review_start` | 70 | global | Observation flag | §9.12 |
+| `exit_review_end` | 80 | global | Observation flag | §9.12 |
+| `ladder_tier_1_day_start` | 60 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_1_day_end` | 74 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_1_depth` | 0.10 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_2_day_start` | 75 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_2_day_end` | 79 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_2_depth` | 0.20 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_3_day_start` | 80 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_3_day_end` | 89 | brick × grade | Markdown (F21) | D21 |
+| `ladder_tier_3_depth` | 0.25 | brick × grade | Markdown (F21) | D21 |
+
+### 5.5 Governance and execution
+
+| Param | Default | Level | Engine | Bible ref |
+|---|---|---|---|---|
+| `review_window_hours` | 12 | global | Pullback review | §9.14 |
+| `sto_expiry_hours` | 72 | global | Reconciliation | D18 |
+| `concentration_brick_pct` | 0.15 | brick | Markdown routing | N5 |
+| `concentration_category_pct` | 0.20 | category | Markdown routing | N5 |
+| `concentration_rupee_cap` | null | global | Markdown routing | N5 (missing) |
+| `concentration_window_days` | 7 | global | Rolling concentration | N5 |
+
+---
+
+## 6. Engine logic
+
+### 6.1 Line state machine
+
+```
+[*] ──► Proposed
+          │
+          ├── (replenishment, auto-band markdown) ──► Released
+          │
+          └── (pullback, stop-and-approve markdown) ──► InReview
+                │
+                ├── (window ends unblocked / approved) ──► Released
+                ├── (block upheld by Head of F&L) ──► Blocked ──► Held
+                └── (approver rejects) ──► Rejected ──► [*]
+                                                          
+Released ──► AcceptedDownstream
+              │
+              ├── ──► InTransitOrApplied ──► ReceivedOrPriced
+              │                                │
+              │                                ├── (match) ──► Reconciled ──► [*]
+              │                                └── (differ) ──► Mismatch ──► [*]
+              │
+              └── (STO not processed in 72h) ──► Expired ──► [*]
+
+Blocked ──► Held ──► [*]
+```
+
+Phase 0 (shadow): lines are written as `Proposed` then immediately marked `shadow_recorded`. No state transitions beyond that.
+
+### 6.2 Replenishment engine (nightly)
+
+**Input:** snapshot measures (option_store_measure, option_health, stock_size, dc_stock_size, lead_time, space_fill).
+
+**Eligibility per option × store:**
+1. Grade is Fashion or Ultimate (Core → VMI, skipped)
+2. Live at store: option_store_measure.on_hand > 0 or option_store_measure.transit > 0 (the option has saleable or in-transit stock at this store)
+3. Lifecycle age (F16) ≤ `repl_window_day` (default 60)
+4. Not on a pending or held pullback line (check engine_line)
+5. Not marked down (check option_state.is_marked_down) — except size-completion (C13)
+
+**Target per option × store (F10):**
+```
+target = ceil(max(true_ros_daily × (lead_time_days + 1), len(pivotal_sizes)))
+```
+
+**Capacity cap per store × brick × grade:**
+1. Sum targets of replenished options + inventory position of non-replenished options
+2. If sum > space_plan_qty (F8): sort replenished options by True ROS ascending, cut lowest first, never below pivotal-size count
+
+**Size split (F11):**
+1. Each pivotal size gets 1 unit base
+2. Remainder = target − pivotal count
+3. Each pivotal size's share = its eligible_units / total eligible_units
+4. Raw allocation = remainder × share, floored
+5. Leftover units to largest fractional remainders (tie-break: size code)
+6. Dispatch per size = max(0, size_target − inventory_position_for_size)
+
+**DC rationing (when DC stock < total dispatch for an article):**
+1. Rank stores by gap ascending (furthest ahead first); supply-constrained and under-min-age rank as gap 0; tie-break True ROS desc then store code
+2. Pass 1: each store gets 1 unit of its largest-shortfall pivotal size
+3. Pass 2: fill remaining dispatch, size by size, until DC stock runs out
+
+**Output:** replenishment lines in engine_line, type `replenishment`, status `Proposed` then immediately `Released` (no review).
+
+### 6.3 Rule tree (Gates 0–4, nightly)
+
+**Input:** snapshot measures, option_state, cost_margin, current_price.
+
+**Evaluated per option × store, Fashion and Ultimate only (C15: Core excluded).**
+
+**Gate 0 — Eligibility:**
+- G0a: lifecycle_age ≥ `exit_day` (90) → outcome `liquidation`
+- G0b: days_in_store < `min_age_days` (14) → outcome `wait`
+
+**Gate 1 — Performance:**
+- True ROS unmeasurable → outcome `wait` (never judged behind)
+- Supply-constrained (band) → outcome `supply_hold`
+- Band Over or On-track → outcome `leave_alone`
+- Band Watch or Under → behind, continue
+
+**Gate 2 — Move feasibility (all sub-gates must pass):**
+- G2a: a destination store in the same DC cluster is selling this option and is below space plan for that brick × grade (simplified feasibility check; the full DC demand F12/F13 is computed later inside the pullback engine)
+- G2b: remaining life to day 90 minus `transit_days` ≥ `runway_min_days`
+- G2c: option_state.pullback_count < `pullback_cap` AND (last_pullback_date is NULL or run_date − last_pullback_date ≥ `cooldown_days`)
+- All pass → outcome `move`
+- Any fail → continue
+
+**Gate 3 — Local rail health:**
+- Thresholds missing (N2) → gate_3 = `not_evaluated`, continue to Gate 4 with outcome routed to stop-and-approve
+- Rail healthy → outcome `hold`
+- Rail dead → continue
+
+**Gate 4 — Margin headroom:**
+- Already marked down (option_state.is_marked_down) → outcome `discount` (ladder progression via markdown engine)
+- lifecycle_age < `markdown_start_day` (60) → outcome `hold` (no early markdown)
+- cost_margin row missing → gate_4 = `not_evaluated`, outcome `hold` (provisional)
+- current_price row missing → gate_4 = `not_evaluated`, outcome `hold` (provisional)
+- Headroom = current_price − margin_floor: if ≤ 0 → outcome `hold_to_exit`
+- Headroom > 0 → outcome `discount`
+
+**Output:** gate_result rows. MOVE outcomes are queued as nominations for the next pullback run. DISCOUNT outcomes feed the markdown engine. All other outcomes are observation-only.
+
+### 6.4 Pullback engine (Monday and Thursday, after replenishment)
+
+**Input:** snapshot measures, gate_result (move nominations), dc_demand, option_state, post-replenishment DC stock.
+
+**DC demand and shortfall per article × DC (F12, F13):**
+```
+For each eligible store (option live, lifecycle_age ≤ 60):
+  contribution = max(0, true_ros_daily × (lead_time + cover_days) − inventory_position)
+
+demand = Σ contributions
+shortfall = max(0, demand − dc_stock_post_replenishment)
+```
+
+**Pullback types, in fixed order per article × DC:**
+
+**1. Broken size set (F14):**
+- Trigger: broken_pct > `broken_threshold` (50%) OR (`broken_pivot_out` AND a pivot size has zero inventory position)
+- Not limited by shortfall
+- Destination: highest-STR store in DC cluster selling the option
+- Space floor check applies
+- Pull full option from donor to DC; DC rebuilds one complete pivotal set and sends to destination
+- Decrement shortfall by qty pulled + donor's demand contribution
+
+**2. Consolidation:**
+- Runs only while shortfall > 0
+- Candidates: Underperforming, or Watch at lifecycle day ≥ 60, or Core past min age
+- Exclude: Supply-constrained, Over, On-track, marked-down, lifecycle ≥ 90
+- Rank: Fashion/Ultimate gap desc (tie oldest stock); Core weeks_of_cover desc (tie oldest)
+- Space floor check applies
+- Pull full option, donor → DC → destination
+- Decrement shortfall; stop when shortfall ≤ 0
+
+**3. Overfill:**
+- Trigger: options_fill > `overfill_threshold` (120%) OR units_fill > `overfill_threshold` (120%)
+- Not limited by shortfall
+- Sort: oldest first by whole weeks in store, then highest weeks_of_cover, then option_code
+- Space floor check applies (C11: stop at floor)
+- Pull until both fills ≤ 120%
+
+**4. Lifecycle-end:**
+- Trigger: first pullback run at lifecycle_age ≥ `exit_day` (90)
+- Fashion and Ultimate only (Core: never)
+- Floor ignored
+- Full option → DC → Fashion Factory
+- Human confirms exit batch (governance trigger)
+
+**5. Replacement (after pulls):**
+- Trigger: store × brick × grade now below space plan after pulls
+- Fashion and Ultimate only
+- Candidate: matching segment/family/class/brick/grade, complete pivotal set at DC, not already live at store, lifecycle ≤ 60
+- Linked to pullback line: released together, held together
+
+**Output:** pullback lines in engine_line (types: `broken`, `consolidation`, `overfill`, `lifecycle_end`, `replacement`). All enter `InReview` with a 12-hour review window.
+
+### 6.5 Markdown engine (nightly, from day 60)
+
+**Input:** gate_result (DISCOUNT outcomes), option_state, cost_margin, current_price.
+
+**For each option × store with outcome `discount` or option_state.is_marked_down:**
+
+1. **Check prerequisites:**
+   - current_price row exists → if not, exclude, reason `missing_price` (N12)
+   - cost_margin row exists → if not, exclude, reason `missing_cost` (N1)
+   
+2. **Compute (F18–F22):**
+   ```
+   blended_cost = base_cost + taxes + cost_buffer          (F18)
+   margin_floor = blended_cost + category_margin            (F19)
+   headroom = current_price − margin_floor                  (F20)
+   ```
+   - Headroom ≤ 0 → hold to exit, no markdown line
+
+3. **Determine tier (F21):**
+   - lifecycle_age in [60, 74] → tier 1, depth = `ladder_tier_1_depth` (10%)
+   - lifecycle_age in [75, 79] → tier 2, depth = `ladder_tier_2_depth` (20%)
+   - lifecycle_age in [80, 89] → tier 3, depth = `ladder_tier_3_depth` (25%)
+   
+4. **Check tier progression:**
+   - Already marked down at same tier → no new line (price already at this tier)
+   - New tier → proceed
+
+5. **Compute marked price (F22):**
+   - Cumulative depth off the pre-markdown reference price (C14)
+   - `marked_price = max(reference_price × (1 − depth), margin_floor)`
+   - If floor binds: flag `floor_binding`
+
+6. **Concentration checks (run-level):**
+   - Brick concentration: lines covering > `concentration_brick_pct` (15%) of brick's live inventory value → T4
+   - Category concentration: > `concentration_category_pct` (20%) of category's options in `concentration_window_days` (7d) → T5
+   - Rupee cap: if `concentration_rupee_cap` is set and event value exceeds it → T6
+   - If any threshold is NULL → `not_evaluated`, all markdown lines → stop-and-approve
+
+**Output:** markdown lines in engine_line, type `markdown`. Auto-band → `Released`. Stop-and-approve → `InReview`.
+
+### 6.6 Governance routing (T1–T7)
+
+Each line is classified into an autonomy band after computation:
+
+| Band | Criteria | Action |
+|---|---|---|
+| **auto** | Replenishment; Fashion markdown within ladder, above floor, ≥ day 60, no concentration breach | Released immediately |
+| **review_window** | Pullback and replacement lines | 12-hour window, block-only |
+| **stop_and_approve** | Floor binds (T1); early markdown (T2); Core/Ultimate event (T3); brick concentration (T4); category concentration (T5); rupee cap (T6); manual price (T7); Gate 3 not_evaluated; any concentration check not_evaluated | Held until approver decides |
+| **manual** | Liquidation batch confirmation | Human confirms |
+
+### 6.7 Execution dispatch
+
+**Phase 0 (shadow):** lines stay at `shadow_recorded`. No files generated.
+
+**Phase 1 (file mode):** generate CSV files per line type:
+- `replenishment_{run_id}.csv`: source_dc, dest_store, article, size, quantity
+- `pullback_{run_id}.csv`: source_store, dest_dc, article, quantity, type, reason
+- `markdown_{run_id}.csv`: store, option_code, current_price, marked_price, depth, tier, reason
+
+File contract matches the engine bible §17 line contract.
+
+---
+
+## 7. Temporal workflow design
+
+### 7.1 NightlyEngineWorkflow
+
+```python
+@workflow.defn
+class NightlyEngineWorkflow:
+    """Top-level workflow: one per org per night."""
+
+    @workflow.run
+    async def run(self, input: EngineRunInput) -> EngineRunResult:
+        # 1. Create engine_run record
+        run_id = await workflow.execute_activity(
+            create_engine_run, input, ...)
+
+        # 2. Resolve and pin settings
+        settings = await workflow.execute_activity(
+            resolve_settings, run_id, ...)
+
+        # 3. Rule tree and replenishment — in parallel
+        #    (neither depends on the other; pullback needs both)
+        gate_task = workflow.execute_activity(
+            evaluate_rule_tree, run_id, ...)
+        repl_tasks = [
+            workflow.execute_child_workflow(
+                ReplenishmentWorkflow.run,
+                ReplenishmentInput(run_id=run_id, dc_code=dc),
+                id=f"repl-{run_id}-{dc}")
+            for dc in input.dc_codes
+        ]
+        gate_results, *repl_results = await asyncio.gather(
+            gate_task, *repl_tasks)
+
+        # 4. Pullback — Mon/Thu only, per DC in parallel, AFTER replenishment
+        if input.pullback_night:
+            pullback_results = await asyncio.gather(*[
+                workflow.execute_child_workflow(
+                    PullbackWorkflow.run,
+                    PullbackInput(run_id=run_id, dc_code=dc),
+                    id=f"pullback-{run_id}-{dc}")
+                for dc in input.dc_codes
+            ])
+
+        # 5. Markdown engine (needs DISCOUNT outcomes from rule tree)
+        markdown_results = await workflow.execute_activity(
+            run_markdown_engine, run_id, ...)
+
+        # 6. Governance routing
+        await workflow.execute_activity(
+            route_lines, run_id, ...)
+
+        # 7. Release auto lines
+        await workflow.execute_activity(
+            release_auto_lines, run_id, ...)
+
+        # 8. Start review workflows for non-auto lines
+        review_lines = await workflow.execute_activity(
+            get_review_lines, run_id, ...)
+        for line in review_lines:
+            await workflow.start_child_workflow(
+                ReviewWorkflow.run,
+                ReviewInput(line_id=line.line_id, ...),
+                id=f"review-{line.line_id}")
+
+        # 9. Execution dispatch (Phase 0: shadow; Phase 1: CSV)
+        await workflow.execute_activity(
+            dispatch_execution, run_id, input.phase, ...)
+
+        return EngineRunResult(run_id=run_id, ...)
+```
+
+### 7.2 ReplenishmentWorkflow (child, per DC)
+
+```python
+@workflow.defn
+class ReplenishmentWorkflow:
+    @workflow.run
+    async def run(self, input: ReplenishmentInput) -> ReplenishmentResult:
+        # 1. Compute targets per option × store
+        targets = await workflow.execute_activity(
+            compute_replenishment_targets, input, ...)
+
+        # 2. Apply capacity caps per store × brick × grade
+        capped = await workflow.execute_activity(
+            apply_capacity_caps, input.run_id, input.dc_code, targets, ...)
+
+        # 3. Size split and dispatch
+        lines = await workflow.execute_activity(
+            size_split_and_dispatch, input.run_id, input.dc_code, capped, ...)
+
+        # 4. DC rationing (if DC is short)
+        if any(l.needs_rationing for l in lines):
+            lines = await workflow.execute_activity(
+                ration_dc_shortage, input.run_id, input.dc_code, lines, ...)
+
+        return ReplenishmentResult(lines=len(lines))
+```
+
+### 7.3 PullbackWorkflow (child, per DC, Mon/Thu)
+
+```python
+@workflow.defn
+class PullbackWorkflow:
+    @workflow.run
+    async def run(self, input: PullbackInput) -> PullbackResult:
+        # 1. Compute DC demand and shortfall per article
+        demand = await workflow.execute_activity(
+            compute_dc_demand, input, ...)
+
+        # 2. Broken size set (all articles, not limited by shortfall)
+        broken = await workflow.execute_activity(
+            run_broken, input.run_id, input.dc_code, demand, ...)
+
+        # 3. Consolidation (until shortfall ≤ 0)
+        consolidated = await workflow.execute_activity(
+            run_consolidation, input.run_id, input.dc_code, demand, ...)
+
+        # 4. Overfill
+        overfill = await workflow.execute_activity(
+            run_overfill, input.run_id, input.dc_code, ...)
+
+        # 5. Lifecycle-end
+        lifecycle = await workflow.execute_activity(
+            run_lifecycle_end, input.run_id, input.dc_code, ...)
+
+        # 6. Replacement
+        replacements = await workflow.execute_activity(
+            compute_replacements, input.run_id, input.dc_code, ...)
+
+        return PullbackResult(...)
+```
+
+### 7.4 ReviewWorkflow (long-running, signal-driven)
+
+```python
+@workflow.defn
+class ReviewWorkflow:
+    """Handles one line's review lifecycle."""
+
+    def __init__(self):
+        self.decision: Optional[str] = None
+
+    @workflow.signal
+    async def decide(self, decision: str, decided_by: str):
+        self.decision = decision
+
+    @workflow.run
+    async def run(self, input: ReviewInput) -> ReviewResult:
+        if input.autonomy_band == "review_window":
+            # Wait for 12h or a block signal
+            try:
+                await workflow.wait_condition(
+                    lambda: self.decision is not None,
+                    timeout=timedelta(hours=input.review_window_hours))
+            except asyncio.TimeoutError:
+                # Window expired, no block → release
+                self.decision = "release"
+        else:
+            # stop_and_approve: wait indefinitely for signal
+            await workflow.wait_condition(
+                lambda: self.decision is not None)
+
+        await workflow.execute_activity(
+            apply_line_decision, input.line_id, self.decision, ...)
+
+        return ReviewResult(line_id=input.line_id, decision=self.decision)
+```
+
+### 7.5 Temporal infrastructure
+
+| Component | Configuration |
+|---|---|
+| **Temporal server** | Self-hosted (docker-compose for dev) or Temporal Cloud |
+| **Task queue** | `style-actions-engine` |
+| **Worker** | Python process using `temporalio` SDK, running alongside the FastAPI app |
+| **Retry policy** | Activities: max 3 attempts, 10s initial backoff, 2× multiplier. Workflows: no auto-retry (human-triggered re-run) |
+| **Workflow ID** | `engine-{org_id}-{run_date}` (deduplication: one run per org per date) |
+| **Visibility** | Temporal Web UI for run monitoring; custom queries for line counts, pending approvals |
+
+---
+
+## 8. API endpoints
+
+All endpoints are organisation-scoped via `X-Org-ID` header (same as existing).
+
+### 8.1 Engine runs
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/engine/runs` | List runs for the org, newest first |
+| POST | `/v1/engine/runs` | Trigger a new engine run against a snapshot. Body: `{snapshot_id, phase, pullback_night?}` |
+| GET | `/v1/engine/runs/{run_id}` | Run status, progress, line_counts summary |
+
+| GET | `/v1/engine/runs/{run_id}/summary` | Attention panels: approaching exits, approval queue, markdown concentration, move activity (§11.6) |
+
+### 8.2 Gate results
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/engine/runs/{run_id}/gates` | Rule tree results. Filters: `store_code`, `option_code`, `outcome`, `deciding_gate`. Sorts: `gap_desc`, `lifecycle_age_desc` |
+| GET | `/v1/engine/runs/{run_id}/gates/{store_code}/{option_code}` | Single gate result detail |
+
+### 8.3 Action lines
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/engine/runs/{run_id}/lines` | Action lines. Filters: `line_type`, `status`, `store_code`, `option_code`, `autonomy_band` |
+| GET | `/v1/engine/lines/{line_id}` | Single line detail with decision trace and settings_used |
+| POST | `/v1/engine/lines/{line_id}/decide` | Approve, reject, or block a line. Body: `{decision: "approve" | "reject" | "block", decided_by}`. Sends a Temporal signal to the ReviewWorkflow |
+
+### 8.4 DC demand
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/engine/runs/{run_id}/demand` | DC demand/shortfall per article × DC. Filter: `dc_code` |
+
+### 8.5 Settings
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/engine/settings` | List all settings for the org, grouped by scope |
+| GET | `/v1/engine/settings/resolve` | Resolve a setting for a specific context. Query: `param`, `dc_code`, `store_code`, `brick`, `grade` |
+| PUT | `/v1/engine/settings` | Create or update a setting. Body: `{scope, scope_key, param, value, effective_from}` |
+
+### 8.6 Export
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/engine/runs/{run_id}/export` | Download CSV files for a completed run (Phase 1) |
+
+### 8.7 Option state
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/engine/options/{store_code}/{option_code}` | Current option state: markdown status, pullback history |
+
+---
+
+## 9. Open items strategy
+
+### 9.1 Conflicts (build with proposed default, make configurable)
+
+| ID | Proposed default | Setting | Flagged in |
+|---|---|---|---|
+| C1 | "A pivot size out" (not any pivotal size) | `broken_pivot_out` | gate_result.gate_2a_reason |
+| C5 | Execute moves, halt markdowns for Core/Ultimate | Governance rule | engine_line.governance_trigger T3 |
+| C8 | Lifecycle-end takes precedence for ≥ day 90 | Pullback ordering logic | gate_result.gate_0 |
+| C11 | Overfill stops at floor | `overfill_respects_floor` (bool, default true) | engine_line.reason |
+| C12 | Brick × grade average True ROS for replacement sizing | `replacement_rate_method` | engine_line.settings_used |
+| C13 | Marked-down options: size-completion replenishment only | `repl_marked_down_mode` (`size_only`) | engine_line.reason |
+| C14 | Cumulative depth off pre-markdown price, one price per tier | Markdown engine logic | engine_line.reference_price |
+| C15 | Core excluded from markdown | `core_markdown_enabled` (false) | gate_result.gate_1 |
+
+### 9.2 Missing external data (build with placeholder)
+
+| ID | Placeholder | Surfaced as |
+|---|---|---|
+| N1 | cost_margin table empty → Gate 4 = `not_evaluated`, outcome `hold` | gate_result.gate_4 = `not_evaluated`, gate_4_reason = `cost_unavailable` |
+| N2 | Rail health thresholds missing → Gate 3 = `not_evaluated` | gate_result.gate_3 = `not_evaluated`, gate_3_reason = `thresholds_missing` |
+| N5 | Concentration values NULL → all markdown → stop-and-approve | engine_line.governance_trigger = `concentration_not_evaluated` |
+| N12 | current_price derived from sales (net ÷ qty) in Phase 0 | current_price.price_source = `sales_derived` |
+
+### 9.3 Defaults needing ruling (build with proposed, flag)
+
+| ID | Proposed | Setting |
+|---|---|---|
+| D2 | Curve after day 60: hold at 75% | `curve_after_60` = `hold` |
+| D5 | True ROS observation period: 14 days | `true_ros_period_days` = 14 (read from snapshot, not engine) |
+| D19 | Replacement trigger metric: ruling needed | `replacement_trigger` = `options_below_plan` |
+| D20 | Exception SLA: ruling needed | `exception_sla_hours` = NULL |
+
+---
+
+## 10. Testing strategy
+
+### 10.1 Unit tests
+
+Each engine module gets its own test file mirroring the engine bible's worked examples:
+- `test_replenishment.py`: policy v1.1 store A example (target 6, pivotal S/M/L, shares 0.2/0.4/0.4)
+- `test_rule_tree.py`: each gate path with known inputs → expected outcome
+- `test_pullback.py`: broken/consolidation/overfill/lifecycle-end with space floor checks
+- `test_markdown.py`: §27 worked example (₹999 → ₹899 at day 72, floor ₹640)
+- `test_settings.py`: cascade resolution at every level
+- `test_line_state.py`: every state transition in the state machine
+
+### 10.2 Integration tests
+
+- Run a full NightlyEngineWorkflow against the fixture snapshot (S3KG + V012, 5 stores)
+- Assert line counts, gate result distributions, and specific known outcomes
+- Assert that option_state persists across two runs (markdown one-way door, pullback count)
+
+### 10.3 Shadow validation (Phase 0)
+
+- Run against existing production snapshots
+- Compare replenishment targets against ANR v2 outputs for overlapping dates
+- Report discrepancies as a structured diff (option, store, our_target, anr_target, delta, reason)
+
+---
+
+## 11. Engine output shapes for FE
+
+This section defines the JSON response shapes the frontend needs, mapped to the 7 UI requirements from the engine scope doc (`impetus-agentic-prototype/docs/specs/style-actions-engine-scope.md`).
+
+### 11.1 Worklist row enrichment — engine outcome per option × store
+
+**FE need:** On every Worklist row, show the engine's recommended action as a badge with an inline summary, plus the value-vs-hold impact.
+
+**Endpoint:** `GET /v1/engine/runs/{run_id}/gates?store_code={store}`
+
+Each gate result carries the data the Worklist row needs:
+
+```json
+{
+  "items": [
+    {
+      "option_code": "700000001_BLU",
+      "store_code": "8080",
+      "outcome": "discount",
+      "outcome_reason": "Discount to ₹899 (tier 1, 10% off, day 72)",
+      "deciding_gate": "gate_4",
+      "badge": {
+        "label": "DISCOUNT",
+        "colour": "red"
+      },
+      "impact": {
+        "marked_price": 899,
+        "current_price": 999,
+        "depth_pct": 0.10,
+        "value_vs_hold": -100,
+        "margin_floor": 640
+      },
+      "lifecycle_age": 72,
+      "days_in_store": 30,
+      "band": "under",
+      "gap": 0.35,
+      "true_ros_daily": 0.5,
+      "availability": 0.75,
+      "has_pending_line": true,
+      "line_id": "line_01JBX..."
+    }
+  ],
+  "total": 7,
+  "outcome_counts": {
+    "leave_alone": 2,
+    "supply_hold": 1,
+    "move": 0,
+    "hold": 1,
+    "discount": 1,
+    "hold_to_exit": 1,
+    "liquidation": 0,
+    "wait": 1
+  }
+}
+```
+
+**Badge colour mapping** (from the engine scope doc):
+
+| Outcome | Badge | Colour |
+|---|---|---|
+| `leave_alone` | LEAVE ALONE | green |
+| `supply_hold` | SUPPLY HOLD | amber |
+| `move` | MOVE | indigo |
+| `hold` | HOLD | gray |
+| `discount` | DISCOUNT | red |
+| `hold_to_exit` | HOLD TO EXIT | amber |
+| `liquidation` | LIQUIDATION | red |
+| `wait` | WAIT | gray |
+
+### 11.2 OptionDrawer — rule tree stepper
+
+**FE need:** A 5-gate stepper showing pass/fail/skip for each gate, with the deciding gate highlighted and key metrics visible.
+
+**Endpoint:** `GET /v1/engine/runs/{run_id}/gates/{store_code}/{option_code}`
+
+```json
+{
+  "option_code": "700000001_BLU",
+  "store_code": "8080",
+  "grade_class": "Fashion",
+  "lifecycle_age": 72,
+  "days_in_store": 30,
+  "band": "under",
+  "gap": 0.35,
+  "true_ros_daily": 0.5,
+  "availability": 0.75,
+  "outcome": "discount",
+  "deciding_gate": "gate_4",
+  "gates": [
+    {
+      "gate": "gate_0",
+      "label": "Eligible?",
+      "result": "pass",
+      "reason": null,
+      "metrics": {
+        "lifecycle_age": 72,
+        "min_age": 14,
+        "exit_day": 90
+      }
+    },
+    {
+      "gate": "gate_1",
+      "label": "Behind curve?",
+      "result": "pass_behind",
+      "reason": "Band Under (gap 35%)",
+      "metrics": {
+        "band": "under",
+        "gap": 0.35,
+        "true_ros_daily": 0.5,
+        "curve_pct": 0.75
+      }
+    },
+    {
+      "gate": "gate_2",
+      "label": "Move feasible?",
+      "result": "fail",
+      "sub_gates": [
+        {
+          "gate": "gate_2a",
+          "label": "Destination exists?",
+          "result": "fail",
+          "reason": "No destination below space plan in DC S3KG"
+        },
+        {
+          "gate": "gate_2b",
+          "label": "Runway?",
+          "result": "skip",
+          "reason": null
+        },
+        {
+          "gate": "gate_2c",
+          "label": "Cap & cooldown?",
+          "result": "skip",
+          "reason": null
+        }
+      ]
+    },
+    {
+      "gate": "gate_3",
+      "label": "Rail healthy?",
+      "result": "not_evaluated",
+      "reason": "Rail health thresholds missing (N2)",
+      "metrics": {}
+    },
+    {
+      "gate": "gate_4",
+      "label": "Discount?",
+      "result": "discount",
+      "reason": "Headroom ₹359, tier 1 (10%), marked price ₹899",
+      "is_deciding": true,
+      "metrics": {
+        "current_price": 999,
+        "margin_floor": 640,
+        "headroom": 359,
+        "tier": 1,
+        "depth_pct": 0.10,
+        "marked_price": 899,
+        "reference_price": 999,
+        "floor_binding": false
+      }
+    }
+  ],
+  "settings_used": {
+    "curve_target": {"value": 0.75, "scope": "global"},
+    "markdown_start_day": {"value": 60, "scope": "global"},
+    "ladder_tier_1_depth": {"value": 0.10, "scope": "brick_grade", "scope_key": "SHIRT:Fashion"},
+    "min_age_days": {"value": 14, "scope": "global"},
+    "exit_day": {"value": 90, "scope": "global"}
+  }
+}
+```
+
+### 11.3 OptionDrawer — margin bridge (waterfall)
+
+**FE need:** A waterfall chart in the OptionDrawer showing full price → discount → marked price → floor.
+
+The data comes from the gate detail response above (`gates[4].metrics`) plus the engine line:
+
+```json
+{
+  "margin_bridge": {
+    "mrp": 999,
+    "current_price": 999,
+    "depth_pct": 0.10,
+    "discount_amount": 100,
+    "marked_price": 899,
+    "blended_cost": 520,
+    "category_margin": 120,
+    "margin_floor": 640,
+    "headroom": 359,
+    "margin_at_marked": 259,
+    "margin_pct_at_marked": 0.288,
+    "floor_binding": false
+  }
+}
+```
+
+### 11.4 Action lines list — for governance and approval queue
+
+**FE need:** Inline governance badges on Worklist rows needing human action, plus an approval queue panel.
+
+**Endpoint:** `GET /v1/engine/runs/{run_id}/lines?autonomy_band=stop_and_approve&status=in_review`
+
+```json
+{
+  "items": [
+    {
+      "line_id": "line_01JBX...",
+      "line_type": "markdown",
+      "status": "in_review",
+      "option_code": "700000001_BLU",
+      "store_code": "8080",
+      "quantity": null,
+      "current_price": 999,
+      "marked_price": 899,
+      "depth": 0.10,
+      "tier": 1,
+      "reason": "Discount to ₹899 (tier 1, 10% off, day 72)",
+      "autonomy_band": "stop_and_approve",
+      "governance_trigger": "T1",
+      "governance_trigger_label": "Deep cut or floor clamp",
+      "approver_role": "Category Manager",
+      "deciding_gate": "gate_4",
+      "created_at": "2026-10-09T02:00:00Z",
+      "expires_at": null,
+      "linked_line_id": null
+    }
+  ],
+  "total": 3,
+  "status_counts": {
+    "in_review": 3,
+    "released": 12,
+    "blocked": 0,
+    "shadow_recorded": 45
+  }
+}
+```
+
+### 11.5 Engine run metadata
+
+**FE need:** When the engine last ran, what snapshot it used, line counts.
+
+**Endpoint:** `GET /v1/engine/runs/{run_id}`
+
+```json
+{
+  "run_id": "run_01JBX...",
+  "snapshot_id": "snap_52ea96ecd080",
+  "org_id": "org_rl_fl",
+  "run_date": "2026-09-29",
+  "phase": "shadow",
+  "status": "succeeded",
+  "pullback_night": false,
+  "started_at": "2026-10-09T02:00:00Z",
+  "finished_at": "2026-10-09T02:03:42Z",
+  "duration_seconds": 222,
+  "settings_version": "v1_2026-10-09",
+  "line_counts": {
+    "total": 60,
+    "replenishment": 42,
+    "broken": 0,
+    "consolidation": 0,
+    "overfill": 0,
+    "lifecycle_end": 0,
+    "replacement": 0,
+    "markdown": 3,
+    "shadow_recorded": 60,
+    "released": 0,
+    "in_review": 0
+  },
+  "gate_counts": {
+    "total": 21,
+    "leave_alone": 8,
+    "supply_hold": 2,
+    "move": 0,
+    "hold": 4,
+    "discount": 3,
+    "hold_to_exit": 1,
+    "liquidation": 0,
+    "wait": 3
+  },
+  "data_readiness": {
+    "cost_margin_available": false,
+    "current_price_source": "sales_derived",
+    "rail_health_available": false,
+    "concentration_values_available": false
+  }
+}
+```
+
+### 11.6 Engine exception attention panels
+
+**FE need:** Dashboard-level panels for approaching exits, approval queue, markdown concentration, move activity.
+
+**Endpoint:** `GET /v1/engine/runs/{run_id}/summary`
+
+```json
+{
+  "run_id": "run_01JBX...",
+  "panels": {
+    "approaching_exits": {
+      "count": 5,
+      "label": "Options approaching day-90 exit",
+      "items": [
+        {
+          "option_code": "700000003_GRY",
+          "store_code": "8080",
+          "lifecycle_age": 82,
+          "days_to_exit": 8,
+          "on_hand": 12,
+          "mrp": 1299
+        }
+      ]
+    },
+    "approval_queue": {
+      "count": 3,
+      "label": "Lines awaiting approval",
+      "by_trigger": {
+        "T1": 1,
+        "T3": 1,
+        "concentration_not_evaluated": 1
+      }
+    },
+    "markdown_concentration": {
+      "brick_flags": [
+        {
+          "brick": "SHIRT",
+          "grade_class": "Fashion",
+          "pct_of_value": 0.18,
+          "threshold": 0.15,
+          "breached": true,
+          "lines_affected": 4
+        }
+      ],
+      "category_flags": []
+    },
+    "move_activity": {
+      "broken_count": 0,
+      "consolidation_count": 0,
+      "overfill_count": 0,
+      "total_units_moved": 0,
+      "next_pullback_date": "2026-10-13"
+    }
+  }
+}
+```
+
+### 11.7 Option state — markdown and pullback history
+
+**FE need:** Show whether an option has been marked down (one-way door), its pullback history, and markdown tier progression.
+
+**Endpoint:** `GET /v1/engine/options/{store_code}/{option_code}`
+
+```json
+{
+  "store_code": "8080",
+  "option_code": "700000001_BLU",
+  "is_marked_down": true,
+  "markdown_history": {
+    "reference_price": 999,
+    "tiers": [
+      {
+        "tier": 1,
+        "depth_pct": 0.10,
+        "marked_price": 899,
+        "run_id": "run_01JBX...",
+        "run_date": "2026-09-29",
+        "lifecycle_age_at_markdown": 72
+      }
+    ],
+    "current_price": 899,
+    "margin_floor": 640,
+    "remaining_headroom": 259
+  },
+  "pullback_history": {
+    "count": 0,
+    "cap": 3,
+    "cooldown_days": 21,
+    "last_pullback_date": null,
+    "cooldown_clear": true,
+    "entries": []
+  },
+  "is_pulled_back": false,
+  "one_way_door": {
+    "in_consolidation_pool": false,
+    "reason": "Marked down at tier 1 — out of consolidation pool"
+  }
+}
+```
+
+### 11.8 Settings per option — resolved cascade
+
+**FE need:** Show which settings shaped this option's decision, with the cascade level that applied.
+
+**Endpoint:** `GET /v1/engine/settings/resolve?param=*&store_code=8080&brick=SHIRT&grade=Fashion&dc_code=S3KG`
+
+```json
+{
+  "context": {
+    "dc_code": "S3KG",
+    "store_code": "8080",
+    "brick": "SHIRT",
+    "grade": "Fashion"
+  },
+  "resolved": [
+    {
+      "param": "curve_target",
+      "value": 0.75,
+      "scope": "global",
+      "scope_key": null
+    },
+    {
+      "param": "ladder_tier_1_depth",
+      "value": 0.10,
+      "scope": "brick_grade",
+      "scope_key": "SHIRT:Fashion"
+    },
+    {
+      "param": "space_floor_options",
+      "value": 1.00,
+      "scope": "global",
+      "scope_key": null
+    },
+    {
+      "param": "pullback_cap",
+      "value": 3,
+      "scope": "global",
+      "scope_key": null
+    },
+    {
+      "param": "min_age_days",
+      "value": 14,
+      "scope": "global",
+      "scope_key": null
+    }
+  ]
+}
+```
+
+---
+
+## 12. Delivery scopes
+
+| Scope | What | Depends on |
+|---|---|---|
+| **E1: Schema + settings** | Migration 005, settings catalogue with defaults, cascade resolution, settings API | Nothing |
+| **E2: Rule tree** | Gates 0–4, gate_result table, gate API, gate detail response | E1 |
+| **E3: Replenishment** | Targets, caps, size split, rationing, replenishment lines | E1 |
+| **E4: Pullback** | DC demand, broken, consolidation, overfill, lifecycle-end, replacement | E1, E3 (post-repl inventory) |
+| **E5: Markdown** | F18–F22, ladder, floor, concentration, markdown lines, margin bridge response | E1, E2 (DISCOUNT outcomes) |
+| **E6: Governance + line state** | T1–T7 routing, state machine, approval API, approval queue response | E1, E2, E3, E4, E5 |
+| **E7: Temporal workflows** | NightlyEngineWorkflow, child workflows, ReviewWorkflow, worker | E1–E6 |
+| **E8: Execution dispatch** | CSV generation (Phase 1), export API | E6, E7 |
+| **E9: FE integration endpoints** | Run summary, attention panels, option state, settings resolve — all §11 response shapes | E2–E6 |
+| **E10: Shadow validation** | Run against existing snapshots, compare with ANR, report | E7, E8 |

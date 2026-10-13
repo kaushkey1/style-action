@@ -1,0 +1,18 @@
+# Pillar 4 — CI/CD quality-gate configuration (impetus-agentic-prototype)
+# Tunable knobs for ci/evaluate_gates.cjs. See docs/ci-cd/ for the full spec.
+
+# Threshold gates
+threshold_pass_rate: 0.75      # UT-2: minimum unit-test pass rate
+coverage_baseline: null        # COV-1: set to the measured baseline (after widening
+                               #        the vitest `include` to src/modules/**); then monotonic
+p0_required: 1.00             # P0 security suite must be 100%
+
+ratchet:
+  pass_rate_target: 0.95       # climb 0.75 -> 0.95 in steps
+
+# Enforcement switch (single source of truth):
+#  - report-only (default): gates run and print a report, the script exits 0 (advisory rollout)
+#  - blocking:              the gate script exits non-zero on failure, failing the build
+mode: report-only
+
+# Re-raised to rebuild with a valid ID-tagged merge commit.

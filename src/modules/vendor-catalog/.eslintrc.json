@@ -1,0 +1,6 @@
+{
+  "rules": {
+    "design-system/prefer-section-header": "off",
+    "design-system/prefer-metric-grid": "off"
+  }
+}

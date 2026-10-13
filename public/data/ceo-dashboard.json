@@ -1,0 +1,1309 @@
+{
+  "id": "ceo",
+  "name": "CEO / Business Head",
+  "subtitle": "₹2,196 Cr stock value across 2,724 stores",
+  "icon": "building",
+  "config": {
+    "pages": [
+      "/",
+      "/control-tower",
+      "/calendar",
+      "/inventory",
+      "/execute/allocation",
+      "/execute/allocation/actions",
+      "/exceptions",
+      "/approvals",
+      "/agents",
+      "/admin/category-teams",
+      "/admin/guardrails",
+      "/store-view",
+      "/otb",
+      "/showroom",
+      "/range",
+      "/range/performance",
+      "/range/carryover",
+      "/aop",
+      "/docs"
+    ],
+    "defaultFilters": {
+      "exceptionDomain": "all",
+      "agentDomain": "all",
+      "calendarTab": "retail"
+    },
+    "dashboardKpiIds": [
+      "ceo-K001",
+      "apex-gm",
+      "apex-st",
+      "ceo-inv-turns",
+      "apex-sc-otif",
+      "ceo-intake-margin",
+      "apex-inv-aged",
+      "ceo-ft-vel"
+    ],
+    "dashboardCards": [
+      "revenue-scoreboard",
+      "worst-performer",
+      "category-leaderboard",
+      "store-health-dist"
+    ]
+  },
+  "tabs": [
+    {
+      "id": "apex-pulse",
+      "name": "Business Pulse",
+      "icon": "activity",
+      "heroKpis": [
+        {
+          "id": "apex-rev",
+          "name": "Revenue Run Rate",
+          "value": "₹25.7 Cr/day",
+          "target": "₹100 Cr/day",
+          "status": "critical",
+          "icon": "indian-rupee",
+          "trend": "down",
+          "trendValue": "4.1%",
+          "trendDirection": "higher-is-better"
+        },
+        {
+          "id": "apex-gm",
+          "name": "Gross Margin",
+          "value": "37.1%",
+          "target": "≥40%",
+          "status": "warning",
+          "icon": "trending-up",
+          "trend": "down",
+          "trendValue": "2.9%",
+          "trendDirection": "higher-is-better"
+        },
+        {
+          "id": "apex-st",
+          "name": "Avg Sell-Through",
+          "value": "23.0%",
+          "target": "≥25%",
+          "status": "warning",
+          "icon": "shopping-bag",
+          "trend": "flat",
+          "trendValue": "0.2%",
+          "trendDirection": "higher-is-better"
+        },
+        {
+          "id": "ceo-nsv",
+          "name": "Net Sales vs Plan",
+          "value": "88%",
+          "target": "≥100%",
+          "status": "critical",
+          "icon": "target",
+          "trend": "down",
+          "trendValue": "2.8%",
+          "trendDirection": "higher-is-better"
+        }
+      ],
+      "charts": [
+        {
+          "id": "revenue-trend",
+          "type": "line",
+          "title": "Monthly Revenue — Actual vs Target",
+          "unit": "Cr",
+          "xAxisKey": "name",
+          "dataKeys": [
+            {
+              "key": "actual",
+              "color": "#6366f1",
+              "label": "Actual"
+            },
+            {
+              "key": "target",
+              "color": "#d1d5db",
+              "label": "Target"
+            }
+          ],
+          "data": [
+            {
+              "name": "Oct",
+              "actual": 885,
+              "target": 1000
+            },
+            {
+              "name": "Nov",
+              "actual": 733,
+              "target": 1000
+            },
+            {
+              "name": "Dec",
+              "actual": 839,
+              "target": 1000
+            },
+            {
+              "name": "Jan",
+              "actual": 844,
+              "target": 1000
+            },
+            {
+              "name": "Feb",
+              "actual": 688,
+              "target": 1000
+            },
+            {
+              "name": "Mar",
+              "actual": 539,
+              "target": 1000
+            }
+          ]
+        },
+        {
+          "id": "category-mix",
+          "type": "pie",
+          "title": "Revenue by Category — Top 5",
+          "unit": "Cr",
+          "data": [
+            {
+              "name": "Womens Wear",
+              "value": 231.9,
+              "color": "#6366f1"
+            },
+            {
+              "name": "Mens Casual",
+              "value": 106.0,
+              "color": "#8b5cf6"
+            },
+            {
+              "name": "Mens Wear",
+              "value": 102.3,
+              "color": "#ec4899"
+            },
+            {
+              "name": "Kids Wear",
+              "value": 91.8,
+              "color": "#f59e0b"
+            },
+            {
+              "name": "Lingerie",
+              "value": 2.6,
+              "color": "#10b981"
+            }
+          ]
+        }
+      ],
+      "kpis": [
+        {
+          "id": "apex-rev",
+          "name": "Revenue Run Rate",
+          "description": "Daily revenue across 2,724 stores (MTD)",
+          "value": "₹25.7 Cr/day",
+          "target": "₹100 Cr/day",
+          "status": "critical",
+          "icon": "indian-rupee"
+        },
+        {
+          "id": "apex-gm",
+          "name": "Gross Margin",
+          "description": "Blended GM across all categories (MTD)",
+          "value": "37.1%",
+          "target": "≥40%",
+          "status": "warning",
+          "icon": "trending-up"
+        },
+        {
+          "id": "apex-st",
+          "name": "Avg Sell-Through Rate",
+          "description": "30-day sell-through rate (weighted avg)",
+          "value": "23.0%",
+          "target": "≥25%",
+          "status": "warning",
+          "icon": "shopping-bag"
+        },
+        {
+          "id": "ceo-nsv",
+          "name": "Net Sales vs Plan",
+          "description": "Season net sales vs AOP target",
+          "value": "88%",
+          "target": "≥100%",
+          "status": "critical",
+          "icon": "target"
+        }
+      ],
+      "sections": [
+        {
+          "type": "revenue-snapshot",
+          "title": "Revenue Snapshot",
+          "periods": [
+            {
+              "label": "Today",
+              "actual": "₹34.8 Cr",
+              "target": "₹47.6 Cr",
+              "achievementPct": 73,
+              "trend": "up",
+              "trendValue": "2.3%",
+              "trendLabel": "vs yesterday",
+              "status": "critical"
+            },
+            {
+              "label": "WTD",
+              "actual": "₹146.2 Cr",
+              "target": "₹333 Cr",
+              "achievementPct": 44,
+              "trend": "down",
+              "trendValue": "1.5%",
+              "trendLabel": "vs last week",
+              "status": "critical"
+            },
+            {
+              "label": "MTD (Mar)",
+              "actual": "₹539 Cr",
+              "target": "₹1,000 Cr",
+              "achievementPct": 54,
+              "trend": "down",
+              "trendValue": "4.1%",
+              "trendLabel": "vs Feb",
+              "status": "critical"
+            }
+          ]
+        },
+        {
+          "type": "drilldown-table",
+          "title": "Revenue & Margin by Category",
+          "headers": [
+            "Name",
+            "Revenue (Cr)",
+            "GM%",
+            "Disc%",
+            "Aged Inv%",
+            "Fresh%"
+          ],
+          "levelLabels": [
+            "Segment",
+            "Family",
+            "SubFamily"
+          ],
+          "rows": [
+            {
+              "cells": [
+                "WOMENS WEAR",
+                "₹231.9",
+                "37.4%",
+                "22.4%",
+                "29.6%",
+                "36.0%"
+              ],
+              "children": [
+                {
+                  "cells": [
+                    "Ethnic Wear",
+                    "₹143.0",
+                    "41.1%",
+                    "18.6%",
+                    "28%",
+                    "38%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Western Wear",
+                    "₹68.5",
+                    "34.3%",
+                    "24.1%",
+                    "26%",
+                    "40%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Sleep Wear",
+                    "₹6.5",
+                    "31.3%",
+                    "14.9%",
+                    "22%",
+                    "45%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Traditional",
+                    "₹4.1",
+                    "-3.0%",
+                    "57.0%",
+                    "52%",
+                    "15%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Occasion Wear",
+                    "₹2.6",
+                    "47.4%",
+                    "4.6%",
+                    "18%",
+                    "55%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Accessories",
+                    "₹2.6",
+                    "25.5%",
+                    "36.9%",
+                    "38%",
+                    "28%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Contemporary",
+                    "₹1.6",
+                    "-17.2%",
+                    "61.3%",
+                    "58%",
+                    "12%"
+                  ]
+                }
+              ]
+            },
+            {
+              "cells": [
+                "MENS CASUAL",
+                "₹106.0",
+                "38.0%",
+                "24.7%",
+                "27.5%",
+                "39.2%"
+              ],
+              "children": [
+                {
+                  "cells": [
+                    "Casual Wear",
+                    "₹69.2",
+                    "37.7%",
+                    "26.1%",
+                    "26%",
+                    "42%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Active Wear",
+                    "₹33.6",
+                    "39.3%",
+                    "21.5%",
+                    "24%",
+                    "45%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Denim Wear",
+                    "₹2.3",
+                    "34.9%",
+                    "15.8%",
+                    "20%",
+                    "48%"
+                  ]
+                }
+              ]
+            },
+            {
+              "cells": [
+                "MENS WEAR",
+                "₹102.3",
+                "40.4%",
+                "21.2%",
+                "24.3%",
+                "39.0%"
+              ],
+              "children": [
+                {
+                  "cells": [
+                    "Smart Casuals",
+                    "₹75.6",
+                    "39.7%",
+                    "17.4%",
+                    "22%",
+                    "42%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Formal Wear",
+                    "₹11.3",
+                    "42.6%",
+                    "23.3%",
+                    "28%",
+                    "38%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Casual Wear",
+                    "₹9.2",
+                    "44.4%",
+                    "34.2%",
+                    "32%",
+                    "35%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Inner Wear",
+                    "₹2.5",
+                    "55.4%",
+                    "21.4%",
+                    "18%",
+                    "52%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Ethnic Wear",
+                    "₹2.0",
+                    "44.6%",
+                    "18.3%",
+                    "25%",
+                    "45%"
+                  ]
+                }
+              ]
+            },
+            {
+              "cells": [
+                "KIDS WEAR",
+                "₹91.8",
+                "31.6%",
+                "26.8%",
+                "27.0%",
+                "38.0%"
+              ],
+              "children": [
+                {
+                  "cells": [
+                    "Kids Boys",
+                    "₹29.7",
+                    "38.1%",
+                    "18.1%",
+                    "22%",
+                    "42%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Kids Girls",
+                    "₹16.5",
+                    "30.4%",
+                    "25.6%",
+                    "26%",
+                    "38%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Youth Boys",
+                    "₹15.4",
+                    "27.0%",
+                    "34.6%",
+                    "32%",
+                    "34%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Youth Girls",
+                    "₹13.7",
+                    "30.0%",
+                    "28.8%",
+                    "28%",
+                    "36%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Boys",
+                    "₹8.7",
+                    "27.6%",
+                    "30.5%",
+                    "30%",
+                    "35%"
+                  ]
+                },
+                {
+                  "cells": [
+                    "Girls",
+                    "₹7.3",
+                    "26.5%",
+                    "32.3%",
+                    "31%",
+                    "34%"
+                  ]
+                }
+              ]
+            },
+            {
+              "cells": [
+                "LINGERIE",
+                "₹2.6",
+                "60.4%",
+                "20.8%",
+                "55.3%",
+                "12.8%"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Performance by Fashion Grade",
+          "headers": [
+            "Grade",
+            "Revenue (Cr)",
+            "GM%",
+            "Disc%",
+            "Articles"
+          ],
+          "rows": [
+            [
+              "0002",
+              "₹225.7",
+              "37.9%",
+              "29.0%",
+              "204K"
+            ],
+            [
+              "0005",
+              "₹125.7",
+              "39.4%",
+              "18.2%",
+              "162K"
+            ],
+            [
+              "0004",
+              "₹115.0",
+              "36.6%",
+              "19.5%",
+              "148K"
+            ],
+            [
+              "0001",
+              "₹39.7",
+              "39.7%",
+              "16.1%",
+              "52K"
+            ],
+            [
+              "0003",
+              "₹29.2",
+              "22.4%",
+              "22.2%",
+              "38K"
+            ]
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Performance by Format",
+          "headers": [
+            "Format",
+            "Stores",
+            "Revenue (Cr)",
+            "GM%",
+            "Disc%"
+          ],
+          "rows": [
+            [
+              "TRENDS",
+              "1,049",
+              "₹323.0",
+              "41.2%",
+              "17.0%"
+            ],
+            [
+              "TRENDS SMALL TOWN",
+              "786",
+              "₹87.6",
+              "36.5%",
+              "22.4%"
+            ],
+            [
+              "FASHION FACTORY",
+              "170",
+              "₹36.6",
+              "-3.2%",
+              "59.2%"
+            ],
+            [
+              "YOUSTA",
+              "125",
+              "₹29.6",
+              "33.8%",
+              "7.5%"
+            ],
+            [
+              "AZORTE",
+              "42",
+              "₹17.2",
+              "56.2%",
+              "5.2%"
+            ],
+            [
+              "TRENDS WOMAN",
+              "175",
+              "₹13.1",
+              "43.7%",
+              "14.2%"
+            ],
+            [
+              "KALANIKETAN",
+              "39",
+              "₹8.4",
+              "44.7%",
+              "15.1%"
+            ],
+            [
+              "GAP",
+              "46",
+              "₹5.6",
+              "56.5%",
+              "14.4%"
+            ]
+          ]
+        },
+        {
+          "type": "alerts",
+          "title": "Data-Driven Alerts",
+          "items": [
+            {
+              "text": "FASHION FACTORY format showing negative GM (-3.2%) with 59.2% discount intensity — immediate intervention needed.",
+              "severity": "high",
+              "time": "Today"
+            },
+            {
+              "text": "WOMENS WEAR Traditional family at -3.0% GM with 57.0% discount. Contemporary at -17.2% GM with 61.3% discount.",
+              "severity": "high",
+              "time": "Today"
+            },
+            {
+              "text": "LINGERIE aged inventory at 55.3%, fresh stock only 12.8% — highest aged percentage across all segments.",
+              "severity": "high",
+              "time": "Today"
+            },
+            {
+              "text": "MTD revenue at ₹539 Cr against ₹1,000 Cr target (54% achievement) — 21 days into March.",
+              "severity": "medium",
+              "time": "1d ago"
+            },
+            {
+              "text": "Grade 0002 contributing ₹225.7 Cr (42% of revenue) but carrying 29.0% discount intensity.",
+              "severity": "medium",
+              "time": "1d ago"
+            },
+            {
+              "text": "SPORTS FOOTWEAR segment showing 52.3% discount intensity with only 17.7% GM.",
+              "severity": "medium",
+              "time": "2d ago"
+            }
+          ]
+        },
+        {
+          "type": "bars",
+          "title": "Exception Severity",
+          "items": [
+            {
+              "label": "Critical",
+              "value": 18,
+              "max": 50,
+              "color": "bg-red-500"
+            },
+            {
+              "label": "Warning",
+              "value": 42,
+              "max": 50,
+              "color": "bg-yellow-500"
+            },
+            {
+              "label": "Info",
+              "value": 28,
+              "max": 50,
+              "color": "bg-blue-500"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "financial",
+      "name": "Financial",
+      "icon": "indian-rupee",
+      "heroKpis": [
+        {
+          "id": "ceo-K001",
+          "name": "Gross Sales",
+          "value": "₹539 Cr",
+          "target": "₹1,000 Cr",
+          "status": "critical",
+          "icon": "indian-rupee",
+          "trend": "down",
+          "trendValue": "21.7%",
+          "trendDirection": "higher-is-better"
+        },
+        {
+          "id": "ceo-intake-margin",
+          "name": "Gross Margin %",
+          "value": "37.1%",
+          "target": "≥40%",
+          "status": "warning",
+          "icon": "trending-up",
+          "trend": "down",
+          "trendValue": "2.9%",
+          "trendDirection": "higher-is-better"
+        },
+        {
+          "id": "ceo-md",
+          "name": "Discount %",
+          "value": "23.7%",
+          "target": "≤20%",
+          "status": "warning",
+          "icon": "tag",
+          "trend": "up",
+          "trendValue": "3.7%",
+          "trendDirection": "lower-is-better"
+        }
+      ],
+      "charts": [
+        {
+          "id": "margin-waterfall",
+          "type": "bar",
+          "title": "Margin Performance by Segment",
+          "unit": "%",
+          "xAxisKey": "name",
+          "data": [
+            {
+              "name": "LINGERIE",
+              "value": 60.4,
+              "color": "#10b981"
+            },
+            {
+              "name": "MENS WEAR",
+              "value": 40.4,
+              "color": "#6366f1"
+            },
+            {
+              "name": "MENS CASUAL",
+              "value": 38.0,
+              "color": "#8b5cf6"
+            },
+            {
+              "name": "WOMENS WEAR",
+              "value": 37.4,
+              "color": "#ec4899"
+            },
+            {
+              "name": "MENS FOOTWEAR",
+              "value": 35.6,
+              "color": "#f59e0b"
+            },
+            {
+              "name": "KIDS WEAR",
+              "value": 31.6,
+              "color": "#f97316"
+            },
+            {
+              "name": "SPORTS FOOTWEAR",
+              "value": 17.7,
+              "color": "#ef4444"
+            }
+          ]
+        }
+      ],
+      "kpis": [
+        {
+          "id": "ceo-K001",
+          "name": "Gross Sales (MTD)",
+          "description": "Total net sales (Mar 1-21, 2024)",
+          "value": "₹539 Cr",
+          "target": "₹1,000 Cr",
+          "status": "critical",
+          "icon": "indian-rupee"
+        },
+        {
+          "id": "ceo-intake-margin",
+          "name": "Gross Margin %",
+          "description": "Blended margin across all segments (MTD)",
+          "value": "37.1%",
+          "target": "≥40%",
+          "status": "warning",
+          "icon": "trending-up"
+        },
+        {
+          "id": "ceo-md",
+          "name": "Discount Intensity",
+          "description": "Average discount % across all sales (MTD)",
+          "value": "23.7%",
+          "target": "≤20%",
+          "status": "warning",
+          "icon": "tag"
+        },
+        {
+          "id": "ceo-gm-proj",
+          "name": "Season End GM% Projection",
+          "description": "Projected GM% based on current trajectory",
+          "value": "36.8%",
+          "target": "≥40%",
+          "status": "critical",
+          "icon": "target"
+        }
+      ]
+    },
+    {
+      "id": "apex-inventory",
+      "name": "Inventory Health",
+      "icon": "package-check",
+      "heroKpis": [
+        {
+          "id": "apex-inv-total",
+          "name": "Total Inventory",
+          "value": "₹2,196 Cr",
+          "target": "<₹2,000 Cr",
+          "status": "warning",
+          "icon": "wallet",
+          "trend": "up",
+          "trendValue": "2.8%",
+          "trendDirection": "lower-is-better"
+        },
+        {
+          "id": "apex-inv-aged",
+          "name": "Aged Stock (>180d)",
+          "value": "₹247.8 Cr",
+          "target": "<5%",
+          "status": "critical",
+          "icon": "alert-triangle",
+          "trend": "up",
+          "trendValue": "1.2%",
+          "trendDirection": "lower-is-better"
+        },
+        {
+          "id": "apex-inv-fresh",
+          "name": "Fresh Inventory",
+          "value": "32.9%",
+          "target": "≥68%",
+          "status": "critical",
+          "icon": "zap",
+          "trend": "down",
+          "trendValue": "3.4%",
+          "trendDirection": "higher-is-better"
+        }
+      ],
+      "charts": [
+        {
+          "id": "inv-age-dist",
+          "type": "pie",
+          "title": "Inventory Age Distribution",
+          "unit": "%",
+          "data": [
+            {
+              "name": "0–30 days",
+              "value": 32.9,
+              "color": "#10b981"
+            },
+            {
+              "name": "31–60 days",
+              "value": 15.3,
+              "color": "#34d399"
+            },
+            {
+              "name": "61–90 days",
+              "value": 9.6,
+              "color": "#f59e0b"
+            },
+            {
+              "name": "91–180 days",
+              "value": 12.2,
+              "color": "#f97316"
+            },
+            {
+              "name": ">180 days",
+              "value": 11.3,
+              "color": "#ef4444"
+            }
+          ]
+        },
+        {
+          "id": "inv-by-category",
+          "type": "horizontal-bar",
+          "title": "Inventory by Segment",
+          "unit": "Cr",
+          "xAxisKey": "name",
+          "data": [
+            {
+              "name": "WOMENS WEAR",
+              "value": 845.6,
+              "color": "#6366f1"
+            },
+            {
+              "name": "MENS CASUAL",
+              "value": 412.9,
+              "color": "#8b5cf6"
+            },
+            {
+              "name": "KIDS WEAR",
+              "value": 370.5,
+              "color": "#ec4899"
+            },
+            {
+              "name": "MENS WEAR",
+              "value": 320.7,
+              "color": "#f59e0b"
+            },
+            {
+              "name": "LINGERIE",
+              "value": 125.2,
+              "color": "#10b981"
+            },
+            {
+              "name": "MENS FOOTWEAR",
+              "value": 39.5,
+              "color": "#06b6d4"
+            }
+          ]
+        }
+      ],
+      "kpis": [
+        {
+          "id": "apex-inv-total",
+          "name": "Total Inventory",
+          "description": "Total saleable stock value (48.6M units)",
+          "value": "₹2,196 Cr",
+          "target": "<₹2,000 Cr",
+          "status": "warning",
+          "icon": "wallet"
+        },
+        {
+          "id": "apex-inv-aged",
+          "name": "Aged Stock (>180d)",
+          "description": "Value at risk of markdown/write-off",
+          "value": "₹247.8 Cr (11.3%)",
+          "target": "<5%",
+          "status": "critical",
+          "icon": "alert-triangle"
+        },
+        {
+          "id": "apex-inv-fresh",
+          "name": "Fresh Inventory",
+          "description": "Stock less than 30 days old",
+          "value": "32.9%",
+          "target": "≥68%",
+          "status": "critical",
+          "icon": "zap"
+        }
+      ],
+      "sections": [
+        {
+          "type": "summary-cards",
+          "title": "Stock Distribution",
+          "cards": [
+            {
+              "label": "0-30 days",
+              "value": "₹722.1 Cr",
+              "status": "on-track"
+            },
+            {
+              "label": "31-60 days",
+              "value": "₹335.3 Cr",
+              "status": "on-track"
+            },
+            {
+              "label": "61-90 days",
+              "value": "₹210.5 Cr",
+              "status": "warning"
+            },
+            {
+              "label": "91-180 days",
+              "value": "₹267.4 Cr",
+              "status": "warning"
+            },
+            {
+              "label": ">180 days",
+              "value": "₹247.8 Cr",
+              "status": "critical"
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "title": "Segment-wise Inventory Health",
+          "headers": [
+            "Segment",
+            "Stock Value",
+            "Units (M)",
+            "Aged%",
+            "Fresh%",
+            "30d ST%"
+          ],
+          "rows": [
+            [
+              "WOMENS WEAR",
+              "₹845.6 Cr",
+              "23.1M",
+              "29.6%",
+              "36.0%",
+              "23.0%"
+            ],
+            [
+              "MENS CASUAL",
+              "₹412.9 Cr",
+              "10.8M",
+              "27.5%",
+              "39.2%",
+              "21.8%"
+            ],
+            [
+              "KIDS WEAR",
+              "₹370.5 Cr",
+              "9.2M",
+              "27.0%",
+              "38.0%",
+              "22.4%"
+            ],
+            [
+              "MENS WEAR",
+              "₹320.7 Cr",
+              "7.4M",
+              "24.3%",
+              "39.0%",
+              "23.6%"
+            ],
+            [
+              "LINGERIE",
+              "₹125.2 Cr",
+              "3.8M",
+              "55.3%",
+              "12.8%",
+              "2.1%"
+            ],
+            [
+              "MENS FOOTWEAR",
+              "₹39.5 Cr",
+              "0.6M",
+              "44.4%",
+              "17.9%",
+              "5.9%"
+            ],
+            [
+              "D2C Fashion",
+              "₹31.1 Cr",
+              "0.8M",
+              "38.3%",
+              "22.5%",
+              "2.4%"
+            ],
+            [
+              "SPORTS FOOTWEAR",
+              "₹28.1 Cr",
+              "0.4M",
+              "56.3%",
+              "6.4%",
+              "6.7%"
+            ]
+          ]
+        },
+        {
+          "type": "bars",
+          "title": "Inventory Age Distribution (% of total value)",
+          "items": [
+            {
+              "label": "0–30 days (Fresh)",
+              "value": 32.9,
+              "max": 100,
+              "color": "bg-green-500"
+            },
+            {
+              "label": "31–60 days",
+              "value": 15.3,
+              "max": 100,
+              "color": "bg-green-400"
+            },
+            {
+              "label": "61–90 days",
+              "value": 9.6,
+              "max": 100,
+              "color": "bg-yellow-400"
+            },
+            {
+              "label": "91–180 days",
+              "value": 12.2,
+              "max": 100,
+              "color": "bg-orange-400"
+            },
+            {
+              "label": ">180 days (Aged)",
+              "value": 11.3,
+              "max": 100,
+              "color": "bg-red-500"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "apex-geography",
+      "name": "Geography",
+      "icon": "map-pin",
+      "heroKpis": [
+        {
+          "id": "apex-geo-stores",
+          "name": "Total Stores",
+          "value": "2,724",
+          "target": "3,000",
+          "status": "on-track",
+          "icon": "shopping-bag"
+        },
+        {
+          "id": "apex-geo-rev",
+          "name": "Avg Revenue/Store",
+          "value": "₹0.94L/day",
+          "target": "≥₹3.0L/day",
+          "status": "critical",
+          "icon": "indian-rupee",
+          "trend": "down",
+          "trendValue": "4.2%",
+          "trendDirection": "higher-is-better"
+        }
+      ],
+      "kpis": [
+        {
+          "id": "apex-geo-stores",
+          "name": "Total Stores",
+          "description": "Active stores (MTD avg: 2,724)",
+          "value": "2,724",
+          "target": "3,000",
+          "status": "on-track",
+          "icon": "shopping-bag"
+        },
+        {
+          "id": "apex-geo-rev",
+          "name": "Avg Revenue/Store",
+          "description": "Daily revenue per store (MTD)",
+          "value": "₹0.94L/day",
+          "target": "≥₹3.0L/day",
+          "status": "critical",
+          "icon": "indian-rupee"
+        }
+      ],
+      "charts": [],
+      "sections": []
+    },
+    {
+      "id": "apex-categories",
+      "name": "Categories",
+      "icon": "layers",
+      "heroKpis": [
+        {
+          "id": "apex-cat-winners",
+          "name": "Segments On-Track",
+          "value": "1 of 7",
+          "target": "≥5",
+          "status": "critical",
+          "icon": "target"
+        },
+        {
+          "id": "apex-cat-md-pending",
+          "name": "Markdown Triggers",
+          "value": "22",
+          "target": "0",
+          "status": "critical",
+          "icon": "alert-triangle"
+        }
+      ],
+      "kpis": [
+        {
+          "id": "apex-cat-winners",
+          "name": "Segments On-Track",
+          "description": "Segments meeting sell-through & GM targets",
+          "value": "1 of 7",
+          "target": "≥5",
+          "status": "critical",
+          "icon": "target"
+        },
+        {
+          "id": "apex-cat-md-pending",
+          "name": "Markdown Triggers Pending",
+          "description": "Unactioned markdown triggers across all segments",
+          "value": "22",
+          "target": "0",
+          "status": "critical",
+          "icon": "alert-triangle"
+        }
+      ],
+      "charts": [],
+      "sections": []
+    },
+    {
+      "id": "operations",
+      "name": "Operations & Supply Chain",
+      "icon": "truck",
+      "heroKpis": [
+        {
+          "id": "apex-sc-otif",
+          "name": "Vendor OTIF",
+          "value": "82%",
+          "target": "≥90%",
+          "status": "critical",
+          "icon": "truck",
+          "trend": "up",
+          "trendValue": "0.8%",
+          "trendDirection": "higher-is-better"
+        },
+        {
+          "id": "apex-sc-fill",
+          "name": "Vendor Fill Rate",
+          "value": "85%",
+          "target": "≥95%",
+          "status": "critical",
+          "icon": "target",
+          "trend": "up",
+          "trendValue": "0.3%",
+          "trendDirection": "higher-is-better"
+        }
+      ],
+      "charts": [],
+      "kpis": [
+        {
+          "id": "apex-sc-otif",
+          "name": "Vendor OTIF",
+          "description": "On-Time In-Full delivery rate (estimated)",
+          "value": "82%",
+          "target": "≥90%",
+          "status": "critical",
+          "icon": "truck"
+        },
+        {
+          "id": "apex-sc-fill",
+          "name": "Vendor Fill Rate",
+          "description": "Order fulfillment rate (estimated)",
+          "value": "85%",
+          "target": "≥95%",
+          "status": "critical",
+          "icon": "target"
+        }
+      ],
+      "sections": [
+        {
+          "type": "summary-cards",
+          "title": "Procurement Pipeline",
+          "cards": [
+            {
+              "label": "Open PRs",
+              "value": "285",
+              "status": "on-track"
+            },
+            {
+              "label": "Open POs",
+              "value": "1,142",
+              "status": "warning"
+            },
+            {
+              "label": "GRN Pending",
+              "value": "168",
+              "status": "warning"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

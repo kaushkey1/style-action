@@ -1,0 +1,155 @@
+{
+  "5331f8af-b091-cb9f-e2a4-d247f2acaf16"  : { 
+    "org_name"       : "Reliance Industries Limited",
+    "schedule_cron"  : "0 6 * * *",
+    "bq_project_id"  : "fynd-jio-impetus-prod",
+    "data_sources"   : [
+      {"name": "sales",     "backend": "bq", "merge_columns" : ["site", "article"], "interval" : 7}, 
+      {"name": "stock",     "backend": "bq", "merge_columns" : ["site", "article"], "interval" : 7}, 
+      {"name": "inward",    "backend": "bq", "merge_columns" : ["site", "article"], "interval" : 3}, 
+      {"name": "forecasts", "backend": "pg", "merge_columns" : ["site", "article"], "interval" : 7},
+      {"name": "str",       "backend": "bq", "merge_columns" : ["site", "article"], "interval" : 42}
+    ],
+    "merge_columns"  : ["site", "article"],
+    "non_null_cols"  : ["closing_stock_qty", "po_qty", "ros"],
+    "input_tables"   : {
+      "sales"               : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.sales",
+      "stock"               : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.Stock",
+      "inward"              : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.INWARD",
+      "catalog"             : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.CATALOG",
+      "site"                : "fynd-jio-impetus-prod.impetus_planning.latest_public_site",
+      "forecasts"           : "impetus_planning.results_article_weekly",
+      "forecast_tracker"    : "impetus_planning.results_tracker",
+      "anr_runs"            : "impetus_planning.anr_runs",
+      "anr_redistribution"  : "impetus_planning.anr_redistribution"
+    },
+    "input_custom_columns" :[
+      {
+        "data_source"   : "str",
+        "column"        : "str",
+        "formula"       : "(billing_qty / (billing_qty + total_stk_qty)) * 100"
+      }
+    ],
+    "data_points"   : [
+      {
+        "name"        : "forecasted_ros",
+        "type"        : "calculated",
+        "formula"     : "result_df['forecast_qty'] / 7",
+        "is_active"   : true,
+        "description" : "forecast_qty / 7"
+      },
+      {
+        "name"        : "average_ros",
+        "type"        : "calculated",
+        "formula"     : "result_df['billing_qty'] / 7",
+        "is_active"   : true,
+        "description" : "net_sales / 7"
+      },
+      {
+        "name"        : "ros",
+        "type"        : "calculated",
+        "formula"     : "result_df['forecasted_ros'].fillna(result_df['average_ros'])",
+        "is_active"   : true,
+        "description" : "forecasted_ros if forecasted_ros is not None else average_ros"
+      },
+      {
+        "name"        : "cover_days",
+        "type"        : "dictionary",
+        "formula"     : "{'fashion_grade' : {'0001': 60, '0002': 60, '0004': 60}}",
+        "is_active"   : true,
+        "description" : "Cover days by fashion grade"
+      },
+      {
+        "name"        : "lead_time_days", 
+        "type"        : "constant",
+        "formula"     : "4",
+        "is_active"   : true,
+        "description" : "Lead time days"
+      },
+      {
+        "name"        : "po_qty",
+        "type"        : "static",
+        "formula"     : "po_qty",
+        "is_active"   : true,
+        "description" : "PO quantity"
+      },
+      {
+        "name"        : "woc",
+        "type"        : "calculated",
+        "formula"     : "result_df['closing_stock_qty'] / (result_df['ros'] * 7)",
+        "is_active"   : true,
+        "description" : "closing_stock_qty / (ros * 7)"
+      },
+      {
+        "name"        : "replenishment_calculated",
+        "type"        : "calculated",
+        "formula"     : "(result_df['ros'] * (result_df['cover_days'] + result_df['lead_time_days'])) - result_df['closing_stock_qty']",
+        "is_active"   : true,
+        "description" : "(ros * (cover_days + lead_time_days)) - closing_stock"
+      }
+    ],
+    "filter_rules": [
+      {
+        "name"          : "recipient_ros_check",
+        "field"         : "ros", 
+        "operator"      : ">",
+        "value"         : 2.5,
+        "is_active"     : true,
+        "description"   : "ROS > 2.5 units/week"
+      },
+      {
+        "name"          : "recipient_woc_check",
+        "field"         : "woc",
+        "operator"      : "<", 
+        "value"         : 1.0,
+        "is_active"     : true,
+        "description"   : "WOC < 1 week"
+      },
+      {
+        "name"          : "recipient_no_active_pos_check",
+        "field"         : "po_qty",
+        "operator"      : "==",
+        "value"         : 0,
+        "is_active"     : true,
+        "description"   : "No active POs"
+      },
+      {
+        "name"          : "donor_ros_check",
+        "field"         : "ros",
+        "operator"      : "<",
+        "value"         : 0.5,
+        "is_active"     : true,
+        "description"   : "ROS < 0.5 units/week"
+      },
+      {
+        "name"          : "donor_str_check",
+        "field"         : "str",
+        "operator"      : "<",
+        "value"         : 30,
+        "is_active"     : true,
+        "description"   : "STR < 30%"
+      }
+    ],
+    "redistribution_template" : {
+      "name"        : "Fair_Value_Allocation",
+      "sort_cols"   : ["dc", "article", "ros", "woc"],
+      "sort_asc"    : [true, true, false, true],
+      "description" : "Resdistribute stock from donor stores to recipient stores using FVA basis high ROS and low WOC"
+    },
+    "constants": {
+      "batch_size"              : "1000",
+      "trailing_days"           : 7,
+      "default_cover_days"      : 60,
+      "min_sales_threshold"     : 0.01,
+      "days_per_week"           : 7,
+      "segments_in_scope"       : ["42", "55", "56", "80"],
+      "sub_formats_in_scope"    : ["14", "42", "43", "49"],
+      "comments_for_ui"         : "Movement as part of Redistribution",
+      "min_woc_donor"           : 14,
+      "max_woc_recipient"       : 5,
+      "min_ros_recipient"       : 0.5,
+      "donor_ros_below_avg"     : true,
+      "post_move_tracking"      : 14
+    }
+  }
+}

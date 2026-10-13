@@ -1,0 +1,268 @@
+{
+  "5331f8af-b091-cb9f-e2a4-d247f2acaf16"  : { 
+    "org_name"       : "Reliance Industries Limited",
+    "schedule_cron"  : "0 6 * * *",
+    "bq_project_id"  : "fynd-jio-impetus-prod",
+    "data_sources"   : [
+      {"name" : "sales",           "backend" : "bq", "level" : "article", "merge_columns" : ["site", "article"],     "interval" : 7, "is_active" : true},
+      {"name" : "stock",           "backend" : "bq", "level" : "article", "merge_columns" : ["site", "article", "option_code", "brand_id", "fashion_grade", "mh_sbu_cd", "mh_segment_cd", "mh_family_cd", "mh_brick_cd", "mh_brick_desc"], "interval" : 7, "is_active" : true}, 
+      {"name" : "inward",          "backend" : "bq", "level" : "article", "merge_columns" : ["site", "article", "option_code", "brand_id", "fashion_grade", "mh_segment_cd", "mh_family_cd", "mh_brick_cd", "mh_brick_desc"], "interval" : 3, "is_active" : true}, 
+      {"name" : "dc_stock",        "backend" : "bq", "level" : "article", "merge_columns" : ["dc", "article"],       "interval" : 7, "is_active" : true}, 
+      {"name" : "avg_billing_qty", "backend" : "bq", "level" : "article", "merge_columns" : ["article"],             "interval" : 7, "is_active" : true}, 
+      {"name" : "replenishments",  "backend" : "pg", "level" : "article", "merge_columns" : ["site", "article"],     "interval" : 7, "is_active" : false}, 
+      {"name" : "pullbacks",       "backend" : "pg", "level" : "option",  "merge_columns" : ["site", "option_code"], "interval" : 7, "is_active" : false}, 
+      {"name" : "redistribution",  "backend" : "pg", "level" : "article", "merge_columns" : ["site", "article"],     "interval" : 7, "is_active" : false}
+    ],
+    "custom_data_sources": [
+      {
+        "name"           : "fill_rate", 
+        "query_template" : "fill_rate_store_brand_brick", 
+        "backend"        : "bq", 
+        "level"          : "option",  
+        "merge_columns"  : ["site", "brand_id", "fashion_grade", "mh_segment_cd", "mh_family_cd", "mh_brick_cd"],
+        "interval"       : 14, 
+        "is_active"      : true
+      }
+    ],
+    "merge_columns"  : ["site", "article"],
+    "non_null_cols"  : ["closing_stock_qty", "po_qty", "total_dc_stock", "ros", "str", "fill_rate", "plan_options", "option_count", "fill_rate_options"],
+    "tables"   : {
+      "sales"                 : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.sales",
+      "stock"                 : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.Stock",
+      "inward"                : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.INWARD",
+      "catalog"               : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.CATALOG",
+      "site"                  : "fynd-jio-impetus-prod.impetus_planning.stores",
+      "planogram_quantities"  : "fynd-jio-impetus-prod.impetus_planning.store_planogram",
+      "planogram_groups"      : "fynd-jio-impetus-prod.impetus_planning.store_planogram_groups",
+      "store_lead_times"      : "fynd-jio-impetus-prod.impetus_planning.store_lead_times",
+      "plm_sku"               : "fynd-jio-impetus-prod.plmpublic.ed_sku",
+      "plm_style"             : "fynd-jio-impetus-prod.plmpublic.ed_style",
+      "forecasts"             : "impetus_planning.results_article_weekly",
+      "forecast_tracker"      : "impetus_planning.results_tracker",
+      "anr_runs"              : "impetus_planning.anr_runs",
+      "anr_replenishment"     : "impetus_planning.anr_replenishment",
+      "anr_redistribution"    : "impetus_planning.anr_redistribution"
+    },
+    "data_points"   : [
+      {
+        "name"        : "average_ros",
+        "type"        : "calculated",
+        "formula"     : "result_df['billing_qty']",
+        "is_active"   : true,
+        "description" : "net_sales - since data is already weekly"
+      },
+      {
+        "name"        : "average_ros_all_stores",
+        "type"        : "calculated",
+        "formula"     : "result_df['avg_billing_qty']",
+        "is_active"   : true,
+        "description" : "average_ros_all_stores - since data is already weekly"
+      },
+      {
+        "name"        : "ros",
+        "type"        : "calculated",
+        "formula"     : "result_df['average_ros']",
+        "is_active"   : true,
+        "description" : "forecasted_ros if forecasted_ros is not None else average_ros"
+      },
+      {
+        "name"        : "str",
+        "type"        : "calculated",
+        "formula"     : "(result_df['billing_qty']/(result_df['billing_qty'] + result_df['closing_stock_qty'])) * 100",
+        "is_active"   : true,
+        "description" : "(billing_qty / (billing_qty + closing_stock_qty)) * 100"
+      },
+      {
+        "name"        : "total_store_options", 
+        "type"        : "constant",
+        "formula"     : 4,
+        "is_active"   : true,
+        "description" : "Total Items replenished for store"
+      },
+      {
+        "name"        : "total_dc_stock",
+        "type"        : "static",
+        "formula"     : "total_dc_stock",
+        "is_active"   : true,
+        "description" : "Available DC stock with buffer"
+      },
+      {
+        "name"        : "po_qty",
+        "type"        : "static",
+        "formula"     : "po_qty",
+        "is_active"   : true,
+        "description" : "PO quantity"
+      },
+      {
+        "name"        : "woc",
+        "type"        : "calculated",
+        "formula"     : "result_df['closing_stock_qty'] / (result_df['ros'] * 7)",
+        "is_active"   : true,
+        "description" : "closing_stock_qty / (ros * 7)"
+      },
+      {
+        "name"        : "replenishment_calculated",
+        "type"        : "calculated",
+        "formula"     : "(result_df['ros'] * result_df['lead_time_days']) - result_df['closing_stock_qty']",
+        "is_active"   : true,
+        "description" : "(ros * lead_time_days) - closing_stock"
+      }
+    ],
+    "filter_rules": [
+      {
+        "name"          : "exclude_no_planogram_entries",
+        "field"         : "plan_qty", 
+        "operator"      : "is_not_null",
+        "is_active"     : true,
+        "description"   : "ROS >= Average ROS across stores"
+      },
+      {
+        "name"          : "min_ros_check",
+        "field"         : "ros", 
+        "operator"      : ">",
+        "value"         : "col(average_ros_all_stores)",
+        "is_active"     : true,
+        "description"   : "ROS >= Average ROS across stores"
+      },
+      {
+        "name"          : "woc_check",
+        "field"         : "woc",
+        "operator"      : "<", 
+        "value"         : 2.0,
+        "is_active"     : true,
+        "description"   : "WOC < 2 weeks"
+      },
+      {
+        "name"          : "min_dc_stock",
+        "field"         : "total_dc_stock",
+        "operator"      : ">=",
+        "value"         : 4,
+        "is_active"     : true,
+        "description"   : "DC stock >= 4 units"
+      },
+      {
+        "name"          : "no_active_pos_check",
+        "field"         : "po_qty",
+        "operator"      : "==",
+        "value"         : 0,
+        "is_active"     : true,
+        "description"   : "No active POs"
+      },
+      {
+        "name"          : "min_threshold_check",
+        "field"         : "replenishment_calculated",
+        "operator"      : ">=",
+        "value"         : 4,
+        "is_active"     : true,
+        "description"   : "Replenishment calculated quantity >= 4"
+      },
+      {
+        "name"          : "min_replenishment_qty",
+        "field"         : "replenishment_qty",
+        "operator"      : ">=",
+        "value"         : 4,
+        "is_active"     : true,
+        "description"   : "Replenishment Final Quantity quantity >= 4"
+      },
+      {
+        "name"          : "max_replenishment_qty",
+        "field"         : "replenishment_qty",
+        "operator"      : "<=",
+        "value"         : 10,
+        "is_active"     : false,
+        "description"   : "Replenishment Final Quantity quantity <= 10"
+      },
+      {
+        "name"          : "min_current_stock",
+        "field"         : "closing_stock_qty",
+        "operator"      : ">=",
+        "value"         : 0,
+        "is_active"     : true,
+        "description"   : "Curent stock >= 0"
+      },
+      {
+        "name"          : "fill_rate_check",
+        "field"         : "fill_rate",
+        "operator"      : "<",
+        "value"         : 120,
+        "is_active"     : true,
+        "description"   : "Fill rate < 120%"
+      },
+      {
+        "name"          : "fill_rate_options_check",
+        "field"         : "fill_rate_options",
+        "operator"      : "<",
+        "value"         : 120,
+        "is_active"     : true,
+        "description"   : "Fill rate < 120%"
+      },
+      {
+        "name"          : "no_active_replenishments",
+        "field"         : "open_replenishments",
+        "operator"      : "==",
+        "value"         : 0,
+        "is_active"     : false,
+        "description"   : "No Active Replenishments"
+      },
+      {
+        "name"          : "no_active_pullbacks",
+        "field"         : "open_pullbacks",
+        "operator"      : "==",
+        "value"         : 0,
+        "is_active"     : false,
+        "description"   : "No Active Pullbacks"
+      },
+      {
+        "name"          : "no_active_redistributions",
+        "field"         : "open_redistributions",
+        "operator"      : "==",
+        "value"         : 0,
+        "is_active"     : false,
+        "description"   : "No Active Redistributions"
+      },
+      {
+        "name"          : "min_store_replenishment_qty",
+        "field"         : "total_store_options",
+        "operator"      : ">=",
+        "value"         : 4,
+        "is_active"     : true,
+        "description"   : "Minimum Replenishment Quantity per store"
+      }
+    ],
+    "replenishment_template" : {
+      "name"        : "dc_stock_fva",
+      "sort_cols"   : ["dc", "article", "ros", "woc"],
+      "sort_asc"    : [true, true, false, true],
+      "description" : "Capped by DC Stock, allocate prioritizing by High ROS and Low WOC"
+    },
+    "constants": {
+      "batch_size"                  : "1000",
+      "trailing_days"               : 7,
+      "default_cover_days"          : 60,
+      "segments_in_scope"           : ["42", "55", "56", "80"],
+      "sub_formats_in_scope"        : ["14", "42", "43", "49"],
+      "brands_in_scope"             : ["F085", "04042","F086", "F137", "F133", "04017"],
+      "run_date"                    : "2026-02-25",
+      "default_fill_rate"           : 0.9,
+      "lead_time_standard"          : 3,
+      "lead_time_express"           : 1,
+      "min_grade_express"           : "A1",
+      "safety_stock_multiplier"     : 1.5,
+      "fill_rate_target"            : 95,
+      "stockout_alert_threshold"    : 7,
+      "vmi_vendors"                 : "Raymond, Arvind, Siyaram",
+      "vmi_enabled"                 : false,
+      "noos_auto_approval"          : true,
+      "dispatch_sla_metro_hours"    : 48,
+      "dispatch_sla_tier23_hours"   : 72,
+      "noos_transfer_eligible"      : false,
+      "min_ros_eligibility"         : 0.2,
+      "min_display_stock"           : 4,
+      "exclude_active_pos"          : true,
+      "max_fill_rate_brick"         : 120,
+      "max_fill_rate_options"       : 120,
+      "min_replenishment_qty"       : 4,
+      "min_store_replenishment_qty" : 4
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "5331f8af-b091-cb9f-e2a4-d247f2acaf16"  : { 
+    "org_name"       : "Reliance Industries Limited",
+    "schedule_cron"  : "0 6 * * *",
+    "bq_project_id"  : "fynd-jio-impetus-prod",
+    "data_sources"   : [
+      {"name" : "stock",           "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code"], "interval" : 14,  "is_active" : true},
+      {"name" : "sales",           "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code", "brand_id", "fashion_grade", "mh_sbu_cd", "mh_segment_cd", "mh_family_cd", "mh_brick_cd", "mh_brick_desc"], "interval" : 14,  "is_active" : true},  
+      {"name" : "inward",          "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code", "brand_id", "fashion_grade", "mh_segment_cd", "mh_family_cd", "mh_brick_cd", "mh_brick_desc"], "interval" : 3, "is_active" : true}, 
+      {"name" : "grn",             "backend" : "bq", "level" : "option",  "merge_columns" : ["site", "option_code", "fashion_grade"], "interval" : 14, "is_active" : true},
+      {"name" : "replenishments",  "backend" : "pg", "level" : "article", "merge_columns" : ["site", "option_code"], "interval" : 7,  "is_active" : false}, 
+      {"name" : "pullbacks",       "backend" : "pg", "level" : "option",  "merge_columns" : ["site", "option_code"], "interval" : 7,  "is_active" : false}, 
+      {"name" : "redistribution",  "backend" : "pg", "level" : "article", "merge_columns" : ["site", "option_code"], "interval" : 7,  "is_active" : false}
+    ],
+    "merge_columns"  : ["site", "option_code"],
+    "non_null_cols"  : ["closing_stock_qty", "total_dc_stock", "age", "po_qty"],
+    "tables"   : {
+      "sales"                 : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.sales",
+      "stock"                 : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.Stock",
+      "inward"                : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.INWARD",
+      "catalog"               : "fynd-jio-impetus-prod.impetus_prod_buyplan_integrations.CATALOG",
+      "site"                  : "fynd-jio-impetus-prod.impetus_planning.stores",
+      "planogram_quantities"  : "fynd-jio-impetus-prod.impetus_planning.store_planogram",
+      "planogram_groups"      : "fynd-jio-impetus-prod.impetus_planning.store_planogram_groups",
+      "store_lead_times"      : "fynd-jio-impetus-prod.impetus_planning.store_lead_times",
+      "plm_sku"               : "fynd-jio-impetus-prod.plmpublic.ed_sku",
+      "plm_style"             : "fynd-jio-impetus-prod.plmpublic.ed_style",
+      "forecasts"             : "impetus_planning.results_article_weekly",
+      "forecast_tracker"      : "impetus_planning.results_tracker",
+      "anr_runs"              : "impetus_planning.anr_runs",
+      "anr_redistribution"    : "impetus_planning.anr_redistribution_new",
+      "grn"                   : "fynd-jio-impetus-prod.analytics_scanpack.public_grn",
+      "grn_item"              : "fynd-jio-impetus-prod.analytics_scanpack.public_grn_item"
+    },
+    "data_points"   : [
+      {
+        "name"          : "pullback_qty",
+        "type"          : "static",
+        "formula"       : "closing_stock_qty",
+        "is_active"     : true,
+        "description"   : "closing_stock_qty"
+      }
+    ],
+    "filter_rules": [
+      {
+        "name"          : "non_core_check",
+        "field"         : "fashion_grade", 
+        "operator"      : "!=",
+        "value"         : "0001",
+        "is_active"     : true,
+        "description"   : "Excluded Core from Pullback"
+      },
+      {
+        "name"          : "aging_stock_check",
+        "field"         : "age",
+        "operator"      : ">",
+        "value"         : 60,
+        "is_active"     : true,
+        "description"   : "Age at store > 120 days"
+      }
+    ],
+    "replacement_template" : {
+      "name"        : "incoming_po_select",
+      "match_on"    : "option_code",
+      "description" : "Pick the matching hierarchy from incoming POs as replacement without repeat and filtering out ones that do not have a replacememt",
+      "is_active"   : true
+    },
+    "constants": {
+      "batch_size"            : "1000",
+      "trailing_days"         : 14,
+      "default_cover_days"    : 60,
+      "min_sales_threshold"   : 0.01,
+      "days_per_week"         : 7,
+      "segments_in_scope"     : ["42", "55", "56", "80"],
+      "sub_formats_in_scope"  : ["14", "42", "43", "49"],
+      "brands_in_scope"       : ["F085", "F086", "F639", "D699"],
+      "run_date"              : "2026-02-25",
+      "default_fill_rate"     : 1.2,
+      "comments_for_ui"       : "Lifecycle Crossed based Pullback",
+      "trailing_window"       : 7,
+      "pullback_cooldown"     : 14,
+      "lc_enabled"            : true
+    }
+  }
+}
