@@ -9,7 +9,7 @@ import { ErrorBlock, LoadingBlock } from '../QueryStates';
 import { OptionDrawer } from '../OptionDrawer';
 import type { WorkspaceParams } from '../useWorkspaceParams';
 import { useJourneyInventory } from './useJourneyInventory';
-import { InventoryStack, POSITION_COLOUR } from './InventoryStack';
+import { POSITION_COLOUR } from './InventoryStack';
 import { BreakdownBars } from './BreakdownBars';
 import { optionBreakdown, breakdownUnits, STAGES, type BreakdownIndex, type BreakdownDimension, type StageFilters } from './inventoryBreakdown';
 import { inventoryBalance, brickName, brickOf, groupInventory, matchesJourneySearch, needsReview, performanceLabel, POSITION_LABEL, type InventoryPosition, type SalesWindow, type JourneyBrick } from './inventoryJourney';
@@ -36,8 +36,6 @@ function PositionCards({ store, snapshot, rows, index, position, onSelect }: { s
         <span className="block text-[11px] font-normal leading-4 sm:col-span-2 text-gray-500">{item === 'sold' ? `Since first receipt · ${formatUnits(store.sales_14d_units)} in last 14 days` : item === 'stock' ? 'On hand at this store' : outbound === null ? 'Incoming only · outgoing unavailable' : `${formatUnits(store.transit_units)} incoming · ${formatUnits(outbound)} outgoing`}</span>
       </button>; })}
     </MetricGrid>
-    <InventoryStack values={values} onSelect={onSelect} label="Store inventory balance" />
-    <p className="text-[11px] leading-4 text-gray-500">Current stock · {outbound === null ? 'recorded incoming transit' : 'incoming + outgoing transit'} · net sales since first receipt. Click a position to see its breakdown.</p>
   </Card>;
 }
 

@@ -36,7 +36,7 @@ These URLs become usable on the recipient's computer after they start the server
 
 ## What to review
 
-- Inventory journey: in-store, in-transit and sold positions; stacked bars; brick → option → size/evidence drill-down.
+- Inventory journey: in-store, in-transit and sold position cards; age, price-stage and transit-direction stacked bars within each position; brick → option → size/evidence drill-down. The combined stock/transit/cumulative-sales bar is removed; totals remain on the position cards.
 - Compact workspace: smaller headings, inline summary metrics, reduced card padding, tighter charts, filters and rows across inventory, engine actions and option drawers. The data-status strip shows compact badges, a gap count and Data health access. Engine actions omits the introductory sentence and aggregate footer; its three summary cards sit in one row from tablet widths. Move stock highlights both distinct option count and requested units, and pricing is labelled Markdown. Coarse-pointer controls retain larger targets. Shared application UI primitives are unchanged.
 - In-store and sold breakdowns: age and selling-price stage. Transit: incoming / outgoing.
 - Engine actions: movement, pricing and options with no action lines; brick and option views with filters. Legends follow the selected action group and show only engines with emitted lines in the current scope. An active zero-count filter remains visible so it can be cleared. Broken sizes, consolidation and overfill remain movement engines when they emit pullback lines; No action lines contains only recorded option decisions without any emitted line.

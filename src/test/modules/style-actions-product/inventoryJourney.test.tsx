@@ -85,7 +85,7 @@ describe('progressive disclosure', () => {
   it('switches to incoming goods and sales without inventing arrival or buying-purpose evidence', async () => {
     const user = userEvent.setup();
     renderJourney();
-    await user.click(await screen.findByRole('button', { name: /^Store inventory balance · In transit:/ }));
+    await user.click(await screen.findByRole('button', { name: 'In transit: 319 units', exact: true }));
     await user.click(await screen.findByRole('button', { name: /^Explore Shirts,/ }));
     await user.click((await screen.findAllByRole('button', { name: /^Explore 700/ }))[0]);
     const dialog = await screen.findByRole('dialog');
